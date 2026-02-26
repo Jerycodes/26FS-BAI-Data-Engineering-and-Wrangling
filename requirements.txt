@@ -1,0 +1,23 @@
+# Daten laden
+yfinance
+requests
+python-dotenv
+
+# Datenverarbeitung
+pandas
+numpy
+
+# Sentiment Analyse
+textblob
+
+# Visualisierung
+matplotlib
+seaborn
+plotly
+
+# Jupyter
+jupyter
+notebook
+
+# Web Scraping
+beautifulsoup4

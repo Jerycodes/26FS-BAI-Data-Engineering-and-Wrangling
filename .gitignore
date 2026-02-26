@@ -1,0 +1,19 @@
+# API Keys und Umgebungsvariablen (NIEMALS ins Git!)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# MacOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
