@@ -21,3 +21,4 @@ notebook
 
 # Web Scraping
 beautifulsoup4
+feedparser
