@@ -7,6 +7,7 @@ Hinweis: Jeder Request verbraucht 5 API-Calls.
 
 import requests
 import pandas as pd
+import json
 import os
 from dotenv import load_dotenv
 
@@ -73,15 +74,23 @@ if __name__ == "__main__":
         articles = load_news(ticker, START_DATE, END_DATE, api_key)
         
         if articles:
+            # Rohdaten als JSON speichern
+            json_filename = f"{name}_news_{START_DATE}_to_{END_DATE}.json"
+            json_path = os.path.join(OUTPUT_DIR, json_filename)
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(articles, f, ensure_ascii=False, indent=2)
+            print(f"  JSON gespeichert: {len(articles)} Artikel -> {json_filename}")
+
+            # Verarbeitete Daten als CSV speichern
             df = pd.DataFrame(articles)
             df["date"] = pd.to_datetime(df["date"])
-            
+
             if "sentiment" in df.columns:
                 sentiment_df = pd.json_normalize(df["sentiment"])
                 df = pd.concat([df.drop(columns=["sentiment"]), sentiment_df], axis=1)
-            
-            filename = f"{name}_news_{START_DATE}_to_{END_DATE}.csv"
-            df.to_csv(os.path.join(OUTPUT_DIR, filename), index=False)
-            print(f"  Gespeichert: {len(df)} Artikel")
+
+            csv_filename = f"{name}_news_{START_DATE}_to_{END_DATE}.csv"
+            df.to_csv(os.path.join(OUTPUT_DIR, csv_filename), index=False)
+            print(f"  CSV gespeichert: {len(df)} Artikel -> {csv_filename}")
     
     print("\nFertig!")
