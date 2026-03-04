@@ -89,6 +89,11 @@ if __name__ == "__main__":
                 sentiment_df = pd.json_normalize(df["sentiment"])
                 df = pd.concat([df.drop(columns=["sentiment"]), sentiment_df], axis=1)
 
+            # Zeilenumbrüche in Textfeldern entfernen (CSV-Lesbarkeit)
+            for col in ["title", "content"]:
+                if col in df.columns:
+                    df[col] = df[col].str.replace(r"\s+", " ", regex=True).str.strip()
+
             csv_filename = f"{name}_news_{START_DATE}_to_{END_DATE}.csv"
             df.to_csv(os.path.join(OUTPUT_DIR, csv_filename), index=False)
             print(f"  CSV gespeichert: {len(df)} Artikel -> {csv_filename}")

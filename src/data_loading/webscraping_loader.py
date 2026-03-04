@@ -86,7 +86,12 @@ if __name__ == "__main__":
     if all_articles:
         df = pd.DataFrame(all_articles)
         df['date'] = pd.to_datetime(df['published'], errors='coerce', utc=True)
-        
+
+        # Zeilenumbrüche in Textfeldern entfernen (CSV-Lesbarkeit)
+        for col in ["title", "summary"]:
+            if col in df.columns:
+                df[col] = df[col].str.replace(r"\s+", " ", regex=True).str.strip()
+
         output_dir = "data/raw/news/webscraping"
         os.makedirs(output_dir, exist_ok=True)
         today = datetime.now().strftime('%Y-%m-%d')
