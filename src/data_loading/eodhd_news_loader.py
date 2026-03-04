@@ -16,7 +16,7 @@ def load_api_key():
     load_dotenv()
     api_key = os.getenv("EODHD_API_KEY")
     if not api_key or api_key == "dein_api_key_hier":
-        raise ValueError("Kein gueltiger EODHD_API_KEY in .env gefunden!")
+        raise ValueError("Kein gültiger EODHD_API_KEY in .env gefunden!")
     return api_key
 
 

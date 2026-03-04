@@ -1,7 +1,7 @@
 """
 eodhd_loader.py - Forex-Daten von EODHD API laden und als CSV speichern.
 
-Dieses Skript laedt historische Forex-Kursdaten von der EODHD API
+Dieses Skript lädt historische Forex-Kursdaten von der EODHD API
 und speichert sie als CSV-Dateien im Ordner data/raw/forex/eodhd/.
 
 API-Dokumentation: https://eodhd.com/financial-apis/api-for-historical-data-and-volumes
@@ -10,7 +10,7 @@ API-Format: https://eodhd.com/api/eod/EURUSD.FOREX?from=2024-01-01&to=2025-12-31
 Verwendung:
     python src/data_loading/eodhd_loader.py
 
-Abhaengigkeiten:
+Abhängigkeiten:
     pip install requests pandas python-dotenv
 """
 
@@ -22,9 +22,9 @@ from dotenv import load_dotenv
 
 def load_api_key() -> str:
     """
-    Laedt den EODHD API-Key aus der .env Datei.
+    Lädt den EODHD API-Key aus der .env Datei.
     
-    Rueckgabe:
+    Rückgabe:
         str: Der API-Key
     """
     # .env Datei laden (sucht im aktuellen Verzeichnis)
@@ -33,22 +33,22 @@ def load_api_key() -> str:
     api_key = os.getenv("EODHD_API_KEY")
     
     if not api_key or api_key == "dein_api_key_hier":
-        raise ValueError("Kein gueltiger EODHD_API_KEY in .env gefunden!")
+        raise ValueError("Kein gültiger EODHD_API_KEY in .env gefunden!")
     
     return api_key
 
 
 def load_forex_data(pair: str, start_date: str, end_date: str, api_key: str) -> pd.DataFrame:
     """
-    Laedt historische Forex-Daten von der EODHD API.
+    Lädt historische Forex-Daten von der EODHD API.
     
     Parameter:
-        pair (str): Waehrungspaar im EODHD-Format, z.B. "EURUSD.FOREX"
+        pair (str): Währungspaar im EODHD-Format, z.B. "EURUSD.FOREX"
         start_date (str): Startdatum im Format "YYYY-MM-DD"
         end_date (str): Enddatum im Format "YYYY-MM-DD"
         api_key (str): EODHD API-Key
     
-    Rueckgabe:
+    Rückgabe:
         pd.DataFrame: DataFrame mit Spalten date, open, high, low, close, adjusted_close, volume
     """
     print(f"Lade {pair} von {start_date} bis {end_date}...")
@@ -58,15 +58,15 @@ def load_forex_data(pair: str, start_date: str, end_date: str, api_key: str) -> 
     params = {
         "from": start_date,
         "to": end_date,
-        "period": "d",        # Taeglich
+        "period": "d",        # Täglich
         "api_token": api_key,
         "fmt": "json"         # JSON-Format
     }
     
-    # API-Request ausfuehren
+    # API-Request ausführen
     response = requests.get(url, params=params)
     
-    # Pruefen ob der Request erfolgreich war
+    # Prüfen ob der Request erfolgreich war
     if response.status_code != 200:
         print(f"FEHLER: HTTP Status {response.status_code}")
         print(f"Antwort: {response.text}")
@@ -76,7 +76,7 @@ def load_forex_data(pair: str, start_date: str, end_date: str, api_key: str) -> 
     data = response.json()
     
     if not data:
-        print(f"WARNUNG: Keine Daten fuer {pair} erhalten!")
+        print(f"WARNUNG: Keine Daten für {pair} erhalten!")
         return pd.DataFrame()
     
     df = pd.DataFrame(data)
@@ -108,14 +108,14 @@ if __name__ == "__main__":
     print("API-Key erfolgreich geladen.\n")
     
     # --- Konfiguration ---
-    # Waehrungspaare im EODHD-Format: SYMBOL.FOREX
+    # Währungspaare im EODHD-Format: SYMBOL.FOREX
     CURRENCY_PAIRS = {
         "EURUSD.FOREX": "EUR_USD",
         "EURCHF.FOREX": "EUR_CHF",
         "GBPUSD.FOREX": "GBP_USD",
     }
     
-    # Gleicher Zeitraum wie Yahoo Finance fuer Vergleich
+    # Gleicher Zeitraum wie Yahoo Finance für Vergleich
     START_DATE = "2024-01-01"
     END_DATE = "2025-12-31"
     OUTPUT_DIR = "data/raw/forex/eodhd"

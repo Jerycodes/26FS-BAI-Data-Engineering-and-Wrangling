@@ -1,6 +1,6 @@
-# Projektkontext fuer Claude
+# Projektkontext für Claude
 
-## Projekt-Uebersicht
+## Projekt-Übersicht
 
 **Kurs:** 26FS BAI - Data Engineering and Wrangling (FHNW)
 **Dozent:** Yannick Suter
@@ -12,9 +12,9 @@
 
 ## Projektthema
 
-Analyse der Korrelation zwischen Forex-Waehrungskursen und Nachrichtenstimmung (Sentiment-Analyse). Mehrere Datenquellen werden geladen, verglichen, bereinigt und in einer Pipeline zusammengefuehrt.
+Analyse der Korrelation zwischen Forex-Währungskursen und Nachrichtenstimmung (Sentiment-Analyse). Mehrere Datenquellen werden geladen, verglichen, bereinigt und in einer Pipeline zusammengeführt.
 
-**Waehrungspaare:** EUR/USD, EUR/CHF, GBP/USD
+**Währungspaare:** EUR/USD, EUR/CHF, GBP/USD
 **Zeitraum:** 2024-01-01 bis 2025-12-31
 
 ---
@@ -24,19 +24,19 @@ Analyse der Korrelation zwischen Forex-Waehrungskursen und Nachrichtenstimmung (
 ```
 datawrangling/
 ├── .env                          # API-Keys (NICHT im Git)
-├── .env.example                  # Vorlage fuer Teammitglieder
+├── .env.example                  # Vorlage für Teammitglieder
 ├── .gitignore
 ├── requirements.txt
 ├── README.md
 ├── LICENSE
 ├── data/
-│   ├── raw/                      # Rohdaten (unveraendert)
+│   ├── raw/                      # Rohdaten (unverändert)
 │   │   ├── forex/
 │   │   │   ├── yahoo/            # CSV: EUR_USD, EUR_CHF, GBP_USD
 │   │   │   ├── eodhd/            # CSV: EUR_USD, EUR_CHF, GBP_USD
 │   │   │   └── metatrader/       # (leer, geplant)
 │   │   └── news/
-│   │       ├── eodhd/            # CSV + teilweise JSON: News pro Waehrungspaar
+│   │       ├── eodhd/            # CSV + teilweise JSON: News pro Währungspaar
 │   │       └── webscraping/      # CSV + JSON: RSS Feeds, Reddit
 │   ├── processed/                # Bereinigte/verarbeitete Daten
 │   │   ├── forex/
@@ -72,7 +72,7 @@ datawrangling/
 ### 1. Yahoo Finance (Forex) - ERLEDIGT
 - **Notebook:** 01_eda_forex_yahoo.ipynb
 - **Loader:** src/data_loading/yahoo_loader.py
-- **API:** yfinance Library (kein Key noetig)
+- **API:** yfinance Library (kein Key nötig)
 - **Ticker:** EURUSD=X, EURCHF=X, GBPUSD=X
 - **Rohdaten:** data/raw/forex/yahoo/*.csv
 
@@ -111,18 +111,18 @@ datawrangling/
 ### Problem
 Aktuell werden die News-Daten von der API geladen, sofort in pandas verarbeitet (Sentiment extrahiert, Spalten umgewandelt) und dann als CSV gespeichert. Die originalen API-Rohdaten (JSON) gehen dabei teilweise verloren.
 
-### Gewuenschter Workflow
+### Gewünschter Workflow
 ```
 API/Scrape -> Raw JSON speichern -> Raw JSON laden -> Verarbeiten -> Processed CSV speichern
 ```
 
-### Was geaendert werden muss
+### Was geändert werden muss
 
 #### Notebook 03 (EODHD News):
 1. **Abschnitt 3 (Laden):** Aufteilen in zwei Zellen:
    - Zelle 1: API aufrufen -> Rohdaten als JSON speichern in data/raw/news/eodhd/
-   - Zelle 2: JSON laden -> DataFrame erstellen -> Sentiment extrahieren -> news_data Dict befuellen
-2. **Abschnitt 7 (Speichern):** Aendern von Rohdaten speichern zu Verarbeitete Daten speichern -> nach data/processed/news/
+   - Zelle 2: JSON laden -> DataFrame erstellen -> Sentiment extrahieren -> news_data Dict befüllen
+2. **Abschnitt 7 (Speichern):** Ändern von Rohdaten speichern zu Verarbeitete Daten speichern -> nach data/processed/news/
 
 #### Notebook 04 (Web Scraping):
 1. Gleiches Prinzip: Erst Raw JSON speichern, dann von JSON laden und verarbeiten
@@ -141,7 +141,7 @@ sentiment_df = df['sentiment'].apply(
 ```
 NaN-Werte sollen erhalten bleiben (nicht durch leere Dicts ersetzt werden).
 
-#### Neuer Code fuer Notebook 03 - Zelle 1 (Laden und Raw speichern):
+#### Neuer Code für Notebook 03 - Zelle 1 (Laden und Raw speichern):
 ```python
 # Nachrichten laden und als Rohdaten (JSON) speichern
 RAW_DIR = '../data/raw/news/eodhd'
@@ -150,7 +150,7 @@ os.makedirs(RAW_DIR, exist_ok=True)
 raw_files = {}
 
 for eodhd_symbol, pair_name in CURRENCY_PAIRS.items():
-    print(f'\nLade Nachrichten fuer {pair_name} ({eodhd_symbol})...')
+    print(f'\nLade Nachrichten für {pair_name} ({eodhd_symbol})...')
     
     articles = load_news(eodhd_symbol, START_DATE, END_DATE, api_key)
     
@@ -169,7 +169,7 @@ for eodhd_symbol, pair_name in CURRENCY_PAIRS.items():
 print('\nAlle Rohdaten gespeichert!')
 ```
 
-#### Neuer Code fuer Notebook 03 - Zelle 2 (Von Raw laden und verarbeiten):
+#### Neuer Code für Notebook 03 - Zelle 2 (Von Raw laden und verarbeiten):
 ```python
 # Rohdaten laden und in DataFrames umwandeln
 news_data = {}
@@ -200,7 +200,7 @@ for pair_name, raw_path in raw_files.items():
 print('\nAlle Daten verarbeitet!')
 ```
 
-#### Neuer Code fuer Notebook 03 - Abschnitt 7 (Processed speichern):
+#### Neuer Code für Notebook 03 - Abschnitt 7 (Processed speichern):
 ```python
 # Verarbeitete Daten als CSV speichern
 PROCESSED_DIR = '../data/processed/news'
@@ -215,7 +215,7 @@ for pair_name, df in news_data.items():
 print('\nVerarbeitete Daten gespeichert!')
 ```
 
-#### Neuer Code fuer eodhd_news_loader.py:
+#### Neuer Code für eodhd_news_loader.py:
 ```python
 """
 eodhd_news_loader.py - Finanznachrichten von EODHD News API laden.
@@ -233,7 +233,7 @@ def load_api_key():
     load_dotenv()
     api_key = os.getenv("EODHD_API_KEY")
     if not api_key or api_key == "dein_api_key_hier":
-        raise ValueError("Kein gueltiger EODHD_API_KEY in .env gefunden!")
+        raise ValueError("Kein gültiger EODHD_API_KEY in .env gefunden!")
     return api_key
 
 
@@ -317,7 +317,7 @@ if __name__ == "__main__":
     print("\nFertig!")
 ```
 
-#### Neuer Code fuer webscraping_loader.py:
+#### Neuer Code für webscraping_loader.py:
 ```python
 """
 webscraping_loader.py - Nachrichten von RSS Feeds und Reddit laden.
@@ -441,21 +441,21 @@ if __name__ == "__main__":
         df = process_scraped(raw_data)
         processed_path = os.path.join(PROCESSED_DIR, f"scraped_news_processed_{today}.csv")
         save_processed(df, processed_path)
-        print(f"\n{len(df)} Eintraege verarbeitet")
+        print(f"\n{len(df)} Einträge verarbeitet")
 ```
 
 ---
 
 ## NAECHSTE SCHRITTE (nach Refactoring)
 
-| # | Aufgabe | Prioritaet |
+| # | Aufgabe | Priorität |
 |---|---------|-----------|
 | 1 | Refactoring: Raw JSON -> Processed CSV Workflow | Hoch |
 | 2 | Vergleichs-Notebook Yahoo vs. EODHD Forex | Hoch |
 | 3 | GDELT als historische News-Quelle (optional) | Mittel |
 | 4 | Datenbereinigung und Harmonisierung | Hoch |
 | 5 | Sentiment-Analyse (VADER / FinBERT) auf News | Mittel |
-| 6 | Forex + Sentiment zusammenfuehren | Mittel |
+| 6 | Forex + Sentiment zusammenführen | Mittel |
 | 7 | Korrelationsanalyse + Visualisierung | Mittel |
 | 8 | Pipeline automatisieren | Mittel |
 | 9 | Projektbericht schreiben | Hoch |
@@ -493,12 +493,12 @@ EODHD_API_KEY=<echter_key>
 
 ---
 
-## Wichtige Hinweise fuer Claude
+## Wichtige Hinweise für Claude
 
-1. **Keine API-Calls ausfuehren** ohne Jeremys Bestaetigung (Free Plan hat Limits)
-2. **Notebooks nicht ueberschreiben** - Jeremy hat bereits Ergebnisse darin. Aenderungen gezielt in einzelnen Zellen vornehmen.
-3. **.env Datei nicht anfassen** - enthaelt echten API-Key
-4. **Immer committen** nach Aenderungen: git add . && git commit -m "..." && git push
-5. **Alte CSV-Rohdaten** in data/raw/news/ muessen nach dem Refactoring aufgeraeumt werden (gehoeren dann nach data/processed/)
-6. **Notebook 04 RSS-Feed-Funktion** benoetigt den SSL-Fix (requests laden, dann feedparser parsen)
-7. **Sentinel fuer fehlende Sentiments:** NaN-Werte bewusst beibehalten, nicht durch leere Dicts ersetzen
+1. **Keine API-Calls ausführen** ohne Jeremys Bestätigung (Free Plan hat Limits)
+2. **Notebooks nicht überschreiben** - Jeremy hat bereits Ergebnisse darin. Änderungen gezielt in einzelnen Zellen vornehmen.
+3. **.env Datei nicht anfassen** - enthält echten API-Key
+4. **Immer committen** nach Änderungen: git add . && git commit -m "..." && git push
+5. **Alte CSV-Rohdaten** in data/raw/news/ müssen nach dem Refactoring aufgeräumt werden (gehören dann nach data/processed/)
+6. **Notebook 04 RSS-Feed-Funktion** benötigt den SSL-Fix (requests laden, dann feedparser parsen)
+7. **Sentinel für fehlende Sentiments:** NaN-Werte bewusst beibehalten, nicht durch leere Dicts ersetzen

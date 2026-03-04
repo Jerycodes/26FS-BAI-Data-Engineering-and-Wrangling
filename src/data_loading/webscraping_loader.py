@@ -92,4 +92,4 @@ if __name__ == "__main__":
         today = datetime.now().strftime('%Y-%m-%d')
         path = os.path.join(output_dir, f"all_scraped_news_{today}.csv")
         df.to_csv(path, index=False)
-        print(f"\nGespeichert: {path} ({len(df)} Eintraege)")
+        print(f"\nGespeichert: {path} ({len(df)} Einträge)")

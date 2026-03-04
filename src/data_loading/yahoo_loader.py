@@ -1,13 +1,13 @@
 """
 yahoo_loader.py - Forex-Daten von Yahoo Finance laden und als CSV speichern.
 
-Dieses Skript laedt historische Forex-Kursdaten (z.B. EUR/USD, EUR/CHF, GBP/USD)
+Dieses Skript lädt historische Forex-Kursdaten (z.B. EUR/USD, EUR/CHF, GBP/USD)
 von Yahoo Finance herunter und speichert sie als CSV-Dateien im Ordner data/raw/forex/yahoo/.
 
 Verwendung:
     python src/data_loading/yahoo_loader.py
 
-Abhaengigkeiten:
+Abhängigkeiten:
     pip install yfinance pandas
 """
 
@@ -19,14 +19,14 @@ from datetime import datetime
 
 def load_forex_data(pair: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
-    Laedt historische Forex-Daten von Yahoo Finance.
+    Lädt historische Forex-Daten von Yahoo Finance.
     
     Parameter:
-        pair (str): Waehrungspaar im Yahoo-Format, z.B. "EURUSD=X"
+        pair (str): Währungspaar im Yahoo-Format, z.B. "EURUSD=X"
         start_date (str): Startdatum im Format "YYYY-MM-DD"
         end_date (str): Enddatum im Format "YYYY-MM-DD"
     
-    Rueckgabe:
+    Rückgabe:
         pd.DataFrame: DataFrame mit Spalten Open, High, Low, Close, Volume
     """
     print(f"Lade {pair} von {start_date} bis {end_date}...")
@@ -35,9 +35,9 @@ def load_forex_data(pair: str, start_date: str, end_date: str) -> pd.DataFrame:
     ticker = yf.Ticker(pair)
     df = ticker.history(start=start_date, end=end_date)
     
-    # Pruefen ob Daten geladen wurden
+    # Prüfen ob Daten geladen wurden
     if df.empty:
-        print(f"WARNUNG: Keine Daten fuer {pair} gefunden!")
+        print(f"WARNUNG: Keine Daten für {pair} gefunden!")
         return df
     
     print(f"Erfolgreich {len(df)} Zeilen geladen.")
@@ -53,8 +53,8 @@ def save_to_csv(df: pd.DataFrame, filename: str, output_dir: str) -> str:
         filename (str): Name der CSV-Datei (ohne Pfad)
         output_dir (str): Zielordner
     
-    Rueckgabe:
-        str: Vollstaendiger Pfad der gespeicherten Datei
+    Rückgabe:
+        str: Vollständiger Pfad der gespeicherten Datei
     """
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, filename)
@@ -63,7 +63,7 @@ def save_to_csv(df: pd.DataFrame, filename: str, output_dir: str) -> str:
     return filepath
 
 
-# Hauptprogramm: Wird ausgefuehrt wenn das Skript direkt gestartet wird
+# Hauptprogramm: Wird ausgeführt wenn das Skript direkt gestartet wird
 if __name__ == "__main__":
     
     # --- Konfiguration ---
