@@ -43,8 +43,8 @@ The `data_cleaning/`, `data_transformation/`, and `pipeline/` modules under `src
 Each data source has its own loader module with standalone execution via `if __name__ == "__main__"`:
 - **yahoo_loader.py** — yfinance, no auth needed
 - **eodhd_loader.py** — EODHD Forex API, requires `EODHD_API_KEY` from `.env`
-- **eodhd_news_loader.py** — EODHD News API with pagination (offset-based, limit=300)
-- **webscraping_loader.py** — RSS feeds (feedparser) + Reddit JSON endpoint
+- **eodhd_news_loader.py** — EODHD News API with pagination (offset-based, limit=300). Saves both raw JSON and processed CSV.
+- **webscraping_loader.py** — RSS feeds (feedparser) + Reddit JSON endpoint. Currently saves only CSV, no raw JSON preservation.
 
 Loaders are functional (no classes), use module-level constants for configuration (tickers, date ranges, output paths).
 
@@ -53,20 +53,35 @@ Numbered EDA notebooks (01–04), one per data source. German markdown documenta
 
 ### Data Layout (`data/raw/`)
 - `forex/yahoo/` and `forex/eodhd/` — CSV files named `{PAIR}_{START}_to_{END}.csv`
-- `news/eodhd/` — News CSV/JSON per currency pair
-- `news/webscraping/` — Scraped RSS + Reddit CSV/JSON with date stamp
+- `news/eodhd/` — News CSV + JSON per currency pair
+- `news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
 
 ## Conventions
 
 - **Language**: Code and variable names in English; comments, notebooks, and documentation in German
 - **Naming**: Currency pairs use underscore format (`EUR_USD`), files use `{PAIR}_data_{START}_to_{END}.csv`
 - **Error messages**: Prefixed with `FEHLER:` (German for "ERROR")
-- **API rate limiting**: 1–2 second delays between requests; EODHD Free Plan has 20 calls/day
+- **API rate limiting**: 1–2 second delays between requests; EODHD Free Plan has 20 calls/day (News = 5 calls per ticker)
+
+## Important Constraints
+
+- **Do not execute API calls** without user confirmation — Free Plan has strict daily limits
+- **Do not overwrite notebooks wholesale** — they contain existing results. Make targeted changes to individual cells only.
+- **Do not modify `.env`** — contains real API key
+- **Sentiment NaN values**: Some EODHD news articles have `sentiment: None`. Preserve these as NaN — do not replace with empty dicts or drop rows.
+
+## Planned Refactoring (see `CLAUDE_KONTEXT.md` for full details)
+
+The main pending task is separating raw data preservation from processing:
+- Current state: `eodhd_news_loader.py` already saves raw JSON + processed CSV; `webscraping_loader.py` only saves CSV
+- Target workflow: All loaders should follow `API → Raw JSON → Load JSON → Process → Processed CSV`
+- Loaders need `save_raw()`, `load_raw()`, `process_*()`, `save_processed()` functions
+- Processed output goes to `data/processed/news/` (not `data/raw/`)
+- Notebooks 03 and 04 need matching updates to split loading/saving cells
 
 ## Known Issues
 
-- **feedparser SSL**: Must fetch RSS content with `requests` first, then pass to `feedparser.parse()` (direct URL parsing fails due to SSL cert issues)
+- **feedparser SSL**: Must fetch RSS content with `requests` first, then pass to `feedparser.parse()` (direct URL parsing fails due to SSL cert issues). Note: `webscraping_loader.py` currently uses direct `feedparser.parse(url)` — this is the part that needs the SSL fix.
 - **Investing.com**: Returns HTTP 403 — scraping blocked, documented as known limitation
 - **RSS/Reddit**: Only provide current data, no historical coverage for the study period
 - **EODHD News**: Some articles have `None` sentiment (preserved as NaN, not dropped)
-- **Raw data preservation**: Current loaders process API responses directly to CSV without saving raw JSON — refactoring to a raw JSON → processed CSV workflow is a planned task (see `CLAUDE_KONTEXT.md` for details)
