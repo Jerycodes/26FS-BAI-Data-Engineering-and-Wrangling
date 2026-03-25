@@ -48,12 +48,19 @@ Each loader is a standalone script (functional style, no classes) with module-le
 `src/data_cleaning/`, `src/data_transformation/`, `src/pipeline/` — only contain `__init__.py`.
 
 ### Notebooks (`notebooks/`)
-Numbered EDA notebooks (01–04), one per data source. German markdown documentation, English code. Use `seaborn-v0_8` plot style.
+Organized into subdirectories:
+- `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–04), one per data source
+- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks (e.g., `Test_datenanalyse.ipynb`)
+
+German markdown documentation, English code. Use `seaborn-v0_8` plot style.
 
 ### Data Layout
-- `data/raw/forex/yahoo/` and `data/raw/forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
-- `data/raw/news/eodhd/` — JSON + CSV per currency pair
-- `data/raw/news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
+All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/` and `data/final/` are scaffolded but not yet populated.
+
+Within `raw/`:
+- `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
+- `news/eodhd/` — JSON + CSV per currency pair
+- `news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
 
 ## Conventions
 
