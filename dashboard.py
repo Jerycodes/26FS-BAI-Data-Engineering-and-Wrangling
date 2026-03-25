@@ -166,6 +166,11 @@ if page == "Uebersicht":
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        # Tabelle unter der Grafik
+        with st.expander(f"Daten anzeigen: {PAIR_LABELS[pair]}"):
+            table_cols = [f"{s}_close" for s in sources]
+            st.dataframe(pair_data[table_cols].dropna(how="all").round(6), use_container_width=True, height=300)
+
 # ---------------------------------------------------------------------------
 # Page: Quellenvergleich
 # ---------------------------------------------------------------------------
@@ -203,6 +208,10 @@ elif page == "Quellenvergleich":
     fig.update_layout(height=450, hovermode="x unified", xaxis_title="Datum", yaxis_title="Preis")
     st.plotly_chart(fig, use_container_width=True)
 
+    with st.expander("Daten anzeigen"):
+        table_cols = [f"{s}_{col_type}" for s in sources]
+        st.dataframe(pair_data[table_cols].dropna(how="all").round(6), use_container_width=True, height=300)
+
     # Differenzen
     if len(sources) >= 2:
         st.subheader("Differenzen zwischen Quellen")
@@ -223,6 +232,12 @@ elif page == "Quellenvergleich":
         fig_diff.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.3)
         fig_diff.update_layout(height=350, hovermode="x unified", yaxis_title="Differenz")
         st.plotly_chart(fig_diff, use_container_width=True)
+
+        with st.expander("Differenzen anzeigen"):
+            diff_table = pd.DataFrame()
+            for other in other_sources:
+                diff_table[f"{ref_source} - {other}"] = pair_data[f"{ref_source}_{col_type}"] - pair_data[f"{other}_{col_type}"]
+            st.dataframe(diff_table.dropna(how="all").round(6), use_container_width=True, height=300)
 
     # Statistiken
     st.subheader("Deskriptive Statistik")
@@ -327,6 +342,12 @@ elif page == "Preisabweichungen":
         ))
         fig_spread.update_layout(height=300, yaxis_title="Spread (absolut)", hovermode="x unified")
         st.plotly_chart(fig_spread, use_container_width=True)
+
+        with st.expander("Spread-Daten anzeigen"):
+            spread_table = pd.DataFrame({"spread": spread})
+            for s in sources:
+                spread_table[f"{s}_{col_type}"] = pair_data[f"{s}_{col_type}"]
+            st.dataframe(spread_table.dropna(how="all").round(6), use_container_width=True, height=300)
 
         # Statistiken
         col1, col2, col3 = st.columns(3)
@@ -471,6 +492,10 @@ elif page == "Eigene Grafik":
         fig.update_layout(height=500, title=f"{PAIR_LABELS[pair]} - {col_type.capitalize()}", hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("Daten anzeigen"):
+            table_cols = [f"{s}_{col_type}" for s in selected_sources]
+            st.dataframe(pair_data[table_cols].dropna(how="all").round(6), use_container_width=True, height=300)
+
     elif chart_type == "Candlestick":
         source = st.selectbox("Quelle", selected_sources)
         fig = go.Figure(data=go.Candlestick(
@@ -485,6 +510,10 @@ elif page == "Eigene Grafik":
                           xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("Daten anzeigen"):
+            ohlc_cols = [f"{source}_{c}" for c in ["open", "high", "low", "close"]]
+            st.dataframe(pair_data[ohlc_cols].dropna(how="all").round(6), use_container_width=True, height=300)
+
     elif chart_type == "Renditen":
         col_type = st.selectbox("Preis-Typ", ["close", "open"], key="ret_col")
         fig = go.Figure()
@@ -496,6 +525,12 @@ elif page == "Eigene Grafik":
         fig.update_layout(height=500, title=f"{PAIR_LABELS[pair]} - Taegliche Renditen", yaxis_title="Rendite",
                           hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("Renditen anzeigen"):
+            ret_table = pd.DataFrame()
+            for source in selected_sources:
+                ret_table[source] = pair_data[f"{source}_{col_type}"].pct_change()
+            st.dataframe(ret_table.dropna(how="all").round(6), use_container_width=True, height=300)
 
     elif chart_type == "Korrelation":
         col_type = st.selectbox("Preis-Typ", ["close", "open", "high", "low"], key="corr_col")
@@ -519,6 +554,13 @@ elif page == "Eigene Grafik":
             fig.update_layout(height=400, title=f"Rolling Korrelation ({window} Tage)", yaxis_title="Korrelation",
                               hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("Korrelationsdaten anzeigen"):
+                corr_table = pd.DataFrame()
+                for i, src_a in enumerate(selected_sources):
+                    for src_b in selected_sources[i + 1:]:
+                        corr_table[f"{src_a} vs {src_b}"] = returns[src_a].rolling(window).corr(returns[src_b])
+                st.dataframe(corr_table.dropna(how="all").round(6), use_container_width=True, height=300)
         else:
             st.info("Mindestens 2 Quellen auswaehlen.")
 
@@ -536,3 +578,12 @@ elif page == "Eigene Grafik":
 
         fig.update_layout(height=450, title=f"{PAIR_LABELS[pair]} - {mode} Boxplot ({col_type})")
         st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("Daten anzeigen"):
+            box_table = pd.DataFrame()
+            for source in selected_sources:
+                if mode == "Preise":
+                    box_table[source] = pair_data[f"{source}_{col_type}"]
+                else:
+                    box_table[source] = pair_data[f"{source}_{col_type}"].pct_change()
+            st.dataframe(box_table.dropna(how="all").round(6), use_container_width=True, height=300)
