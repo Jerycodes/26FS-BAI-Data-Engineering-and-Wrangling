@@ -23,3 +23,6 @@ notebook
 beautifulsoup4
 feedparser
 lxml
+
+# Dashboard
+streamlit
