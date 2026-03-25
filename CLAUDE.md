@@ -50,7 +50,7 @@ Each loader is a standalone script (functional style, no classes) with module-le
 ### Notebooks (`notebooks/`)
 Organized into subdirectories:
 - `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–04), one per data source
-- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks (e.g., `Test_datenanalyse.ipynb`)
+- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks (e.g., `Test_datenanalyse.ipynb` covers webscraping news wrangling + MetaTrader EDA + cross-source comparison of Yahoo/EODHD/MetaTrader)
 
 German markdown documentation, English code. Use `seaborn-v0_8` plot style.
 
@@ -59,6 +59,7 @@ All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/`
 
 Within `raw/`:
 - `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
+- `forex/metatrader/` — MetaTrader 5 exports: tab-separated CSVs with `<DATE>`, `<OPEN>`, etc. headers. Currently EURUSD Daily and M15 (15-minute) data.
 - `news/eodhd/` — JSON + CSV per currency pair
 - `news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
 
