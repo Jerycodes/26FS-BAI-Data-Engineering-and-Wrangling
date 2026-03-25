@@ -25,4 +25,4 @@ feedparser
 lxml
 
 # Dashboard
-streamlit
+streamlit>=1.45.0
