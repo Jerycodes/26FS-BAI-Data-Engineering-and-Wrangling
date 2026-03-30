@@ -1,5 +1,5 @@
 """
-Forex & News Daten-Dashboard
+Forex, Öl & News Daten-Dashboard
 Starten mit: streamlit run dashboard.py
 """
 
@@ -24,6 +24,8 @@ st.set_page_config(
 DATA_DIR = "data"
 PAIRS = ["EUR_USD", "EUR_CHF", "GBP_USD"]
 PAIR_LABELS = {"EUR_USD": "EUR/USD", "EUR_CHF": "EUR/CHF", "GBP_USD": "GBP/USD"}
+OIL_TICKERS = ["WTI_Crude_Oil", "Brent_Crude_Oil"]
+OIL_LABELS = {"WTI_Crude_Oil": "WTI Crude Oil", "Brent_Crude_Oil": "Brent Crude Oil"}
 
 # ---------------------------------------------------------------------------
 # Data Loading (cached)
@@ -38,7 +40,7 @@ def load_combined_forex():
 
 @st.cache_data
 def load_raw_sources():
-    """Lade alle Rohdaten fuer detaillierten Vergleich."""
+    """Lade alle Rohdaten für detaillierten Vergleich."""
     data = {}
     for pair in PAIRS:
         data[pair] = {}
@@ -69,6 +71,21 @@ def load_raw_sources():
         data["EUR_USD"]["metatrader"] = df
 
     return data
+
+
+@st.cache_data
+def load_oil_data():
+    """Lade Ölpreisdaten von Yahoo Finance."""
+    oil = {}
+    for ticker in OIL_TICKERS:
+        files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "oil", "yahoo", f"{ticker}_*.csv")))
+        if files:
+            df = pd.read_csv(files[-1], index_col=0, parse_dates=True)
+            df.index = pd.to_datetime(df.index, utc=True).tz_localize(None).ceil("D")
+            df = df[~df.index.duplicated(keep="first")]
+            df = df.rename(columns=str.lower)
+            oil[ticker] = df
+    return oil
 
 
 @st.cache_data
@@ -105,41 +122,43 @@ def load_news_webscraping():
 # ---------------------------------------------------------------------------
 df_combined = load_combined_forex()
 raw_data = load_raw_sources()
+oil_data = load_oil_data()
 news_eodhd = load_news_eodhd()
 news_scraping = load_news_webscraping()
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
-st.sidebar.title("📈 Forex Dashboard")
+st.sidebar.title("📈 Forex & Öl Dashboard")
 
 page = st.sidebar.radio("Navigation", [
-    "Uebersicht",
+    "Übersicht",
     "Quellenvergleich",
-    "Lueckenanalyse",
+    "Lückenanalyse",
     "Preisabweichungen",
+    "Ölpreise",
     "Nachrichten",
     "Eigene Grafik",
 ])
 
 # ---------------------------------------------------------------------------
-# Page: Uebersicht
+# Page: Übersicht
 # ---------------------------------------------------------------------------
-if page == "Uebersicht":
-    st.title("Forex-Daten Uebersicht")
+if page == "Übersicht":
+    st.title("Forex-Daten Übersicht")
 
     # KPIs
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Waehrungspaare", len(PAIRS))
+    col1.metric("Währungspaare", len(PAIRS))
     col2.metric("Datenquellen", "3 (Yahoo, EODHD, MT5)")
     col3.metric("Total Datenpunkte", f"{len(df_combined):,}")
 
     n_gaps = df_combined["has_gap"].sum()
-    col4.metric("Tage mit Luecken", n_gaps)
+    col4.metric("Tage mit Lücken", n_gaps)
 
     st.markdown("---")
 
-    # Uebersicht pro Paar
+    # Übersicht pro Paar
     for pair in PAIRS:
         pair_data = df_combined[df_combined["pair"] == pair]
         st.subheader(PAIR_LABELS[pair])
@@ -177,7 +196,7 @@ if page == "Uebersicht":
 elif page == "Quellenvergleich":
     st.title("Quellenvergleich")
 
-    pair = st.selectbox("Waehrungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
+    pair = st.selectbox("Währungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
     pair_data = df_combined[df_combined["pair"] == pair]
     sources = [s for s in ["yahoo", "eodhd", "metatrader"] if f"{s}_close" in pair_data.columns and pair_data[f"{s}_close"].notna().any()]
 
@@ -247,12 +266,12 @@ elif page == "Quellenvergleich":
     st.dataframe(stats_df.round(6), use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# Page: Lueckenanalyse
+# Page: Lückenanalyse
 # ---------------------------------------------------------------------------
-elif page == "Lueckenanalyse":
-    st.title("Lueckenanalyse - Fehlende Daten")
+elif page == "Lückenanalyse":
+    st.title("Lückenanalyse - Fehlende Daten")
 
-    pair = st.selectbox("Waehrungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
+    pair = st.selectbox("Währungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
     pair_data = df_combined[df_combined["pair"] == pair]
 
     sources = [s for s in ["yahoo", "eodhd", "metatrader"] if f"{s}_close" in pair_data.columns and pair_data[f"{s}_close"].notna().any()]
@@ -261,8 +280,8 @@ elif page == "Lueckenanalyse":
     if only_weekdays:
         pair_data = pair_data[~pair_data["is_weekend"]]
 
-    # Heatmap: Datenverfuegbarkeit pro Monat
-    st.subheader("Monatliche Datenverfuegbarkeit")
+    # Heatmap: Datenverfügbarkeit pro Monat
+    st.subheader("Monatliche Datenverfügbarkeit")
     coverage = pd.DataFrame(index=pair_data.index)
     for source in sources:
         coverage[source] = pair_data[f"{source}_close"].notna().astype(int)
@@ -280,13 +299,13 @@ elif page == "Lueckenanalyse":
     fig_heat.update_layout(height=200 + 50 * len(sources), xaxis=dict(tickangle=45))
     st.plotly_chart(fig_heat, use_container_width=True)
 
-    # Tage mit Luecken
+    # Tage mit Lücken
     st.subheader("Tage mit fehlenden Daten")
     gaps = pair_data[pair_data["has_gap"]]
     if len(gaps) == 0:
-        st.success("Keine Luecken gefunden!")
+        st.success("Keine Lücken gefunden!")
     else:
-        st.warning(f"{len(gaps)} Tage mit Luecken")
+        st.warning(f"{len(gaps)} Tage mit Lücken")
         gap_display = gaps.copy()
         gap_display["fehlend_in"] = ""
         for idx, row in gap_display.iterrows():
@@ -315,19 +334,19 @@ elif page == "Lueckenanalyse":
 elif page == "Preisabweichungen":
     st.title("Preisabweichungen zwischen Quellen")
 
-    pair = st.selectbox("Waehrungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
+    pair = st.selectbox("Währungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
     pair_data = df_combined[df_combined["pair"] == pair]
     pair_data = pair_data[~pair_data["is_weekend"]]
 
     sources = [s for s in ["yahoo", "eodhd", "metatrader"] if f"{s}_close" in pair_data.columns and pair_data[f"{s}_close"].notna().any()]
 
     if len(sources) < 2:
-        st.warning("Mindestens 2 Quellen noetig fuer Vergleich")
+        st.warning("Mindestens 2 Quellen nötig für Vergleich")
     else:
         col_type = st.selectbox("Preis-Typ", ["close", "open", "high", "low"])
 
-        # Spread (Max - Min) ueber alle Quellen
-        st.subheader("Taeglicher Spread (Max - Min aller Quellen)")
+        # Spread (Max - Min) über alle Quellen
+        st.subheader("Täglicher Spread (Max - Min aller Quellen)")
         price_cols = [f"{s}_{col_type}" for s in sources]
         daily_max = pair_data[price_cols].max(axis=1)
         daily_min = pair_data[price_cols].min(axis=1)
@@ -385,7 +404,7 @@ elif page == "Preisabweichungen":
             st.plotly_chart(fig_scatter, use_container_width=True)
 
         # Top Abweichungen
-        st.subheader("Top-10 groesste Abweichungen")
+        st.subheader("Top-10 grösste Abweichungen")
         top = diff.abs().nlargest(10)
         top_df = pd.DataFrame({
             "Datum": top.index.strftime("%Y-%m-%d"),
@@ -394,6 +413,130 @@ elif page == "Preisabweichungen":
             f"{src_b} {col_type}": pair_data.loc[top.index, f"{src_b}_{col_type}"].values,
         })
         st.dataframe(top_df, use_container_width=True, hide_index=True)
+
+# ---------------------------------------------------------------------------
+# Page: Ölpreise
+# ---------------------------------------------------------------------------
+elif page == "Ölpreise":
+    st.title("Ölpreise: WTI & Brent Crude Oil")
+
+    if not oil_data:
+        st.warning("Keine Öldaten vorhanden. Bitte zuerst das Notebook 05_eda_oil_yahoo.ipynb ausführen.")
+    else:
+        # KPIs
+        col1, col2, col3 = st.columns(3)
+        if "WTI_Crude_Oil" in oil_data:
+            wti_last = oil_data["WTI_Crude_Oil"]["close"].dropna().iloc[-1]
+            col1.metric("WTI (letzter Close)", f"${wti_last:.2f}")
+        if "Brent_Crude_Oil" in oil_data:
+            brent_last = oil_data["Brent_Crude_Oil"]["close"].dropna().iloc[-1]
+            col2.metric("Brent (letzter Close)", f"${brent_last:.2f}")
+        if "WTI_Crude_Oil" in oil_data and "Brent_Crude_Oil" in oil_data:
+            spread_last = brent_last - wti_last
+            col3.metric("Brent-WTI Spread", f"${spread_last:.2f}")
+
+        st.markdown("---")
+
+        # Kursverlauf
+        st.subheader("Kursverlauf (USD/Barrel)")
+        fig_oil = go.Figure()
+        for ticker in OIL_TICKERS:
+            if ticker in oil_data:
+                series = oil_data[ticker]["close"].dropna()
+                fig_oil.add_trace(go.Scatter(
+                    x=series.index, y=series,
+                    name=OIL_LABELS[ticker],
+                    mode="lines", line=dict(width=1),
+                ))
+        fig_oil.update_layout(height=450, hovermode="x unified", xaxis_title="Datum", yaxis_title="Preis (USD)",
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02))
+        st.plotly_chart(fig_oil, use_container_width=True)
+
+        with st.expander("Öldaten anzeigen"):
+            oil_table = pd.DataFrame({OIL_LABELS[t]: oil_data[t]["close"] for t in OIL_TICKERS if t in oil_data})
+            st.dataframe(oil_table.dropna(how="all").round(2), use_container_width=True, height=300)
+
+        # Brent-WTI Spread
+        if "WTI_Crude_Oil" in oil_data and "Brent_Crude_Oil" in oil_data:
+            st.subheader("Brent-WTI Spread")
+            spread_df = pd.DataFrame({
+                "WTI": oil_data["WTI_Crude_Oil"]["close"],
+                "Brent": oil_data["Brent_Crude_Oil"]["close"],
+            }).dropna()
+            spread_df["Spread"] = spread_df["Brent"] - spread_df["WTI"]
+
+            fig_spread = go.Figure()
+            fig_spread.add_trace(go.Scatter(
+                x=spread_df.index, y=spread_df["Spread"],
+                fill="tozeroy", fillcolor="rgba(100, 150, 255, 0.3)",
+                line=dict(color="steelblue", width=1), name="Spread",
+            ))
+            fig_spread.add_hline(y=spread_df["Spread"].mean(), line_dash="dash", line_color="red",
+                                 annotation_text=f"Mittelwert: ${spread_df['Spread'].mean():.2f}")
+            fig_spread.update_layout(height=300, yaxis_title="Spread (USD)", hovermode="x unified")
+            st.plotly_chart(fig_spread, use_container_width=True)
+
+        # Korrelation mit Forex
+        st.subheader("Korrelation Öl vs. Forex (tägliche Renditen)")
+        all_close = pd.DataFrame()
+        for ticker in OIL_TICKERS:
+            if ticker in oil_data:
+                all_close[OIL_LABELS[ticker]] = oil_data[ticker]["close"]
+        for pair in PAIRS:
+            files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "forex", "yahoo", f"{pair}_*.csv")))
+            if files:
+                df_fx = pd.read_csv(files[-1], index_col=0, parse_dates=True)
+                df_fx.index = pd.to_datetime(df_fx.index, utc=True).tz_localize(None).ceil("D")
+                df_fx = df_fx[~df_fx.index.duplicated(keep="first")]
+                df_fx = df_fx.rename(columns=str.lower)
+                all_close[PAIR_LABELS[pair]] = df_fx["close"]
+
+        all_close = all_close.dropna()
+        if len(all_close) > 30:
+            returns = all_close.pct_change().dropna()
+            corr = returns.corr()
+
+            fig_corr = px.imshow(
+                corr.values, x=corr.columns, y=corr.index,
+                color_continuous_scale="RdBu_r", zmin=-1, zmax=1,
+                text_auto=".3f", aspect="auto",
+            )
+            fig_corr.update_layout(height=400, title="Korrelationsmatrix (tägliche Renditen)")
+            st.plotly_chart(fig_corr, use_container_width=True)
+
+            # Rollende Korrelation
+            st.subheader("Rollende Korrelation: WTI vs. Forex")
+            window = st.slider("Rolling-Window (Tage)", 10, 120, 30, key="oil_window")
+
+            fig_roll = go.Figure()
+            for pair in PAIRS:
+                label = PAIR_LABELS[pair]
+                if "WTI Crude Oil" in returns.columns and label in returns.columns:
+                    rolling_corr = returns["WTI Crude Oil"].rolling(window).corr(returns[label])
+                    fig_roll.add_trace(go.Scatter(
+                        x=rolling_corr.index, y=rolling_corr,
+                        name=f"WTI vs. {label}", mode="lines", line=dict(width=1),
+                    ))
+            fig_roll.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.3)
+            fig_roll.update_layout(height=400, yaxis_title="Korrelation", hovermode="x unified",
+                                   yaxis=dict(range=[-1, 1]))
+            st.plotly_chart(fig_roll, use_container_width=True)
+
+            # Normalisierte Kurse
+            st.subheader("Normalisierte Kursentwicklung (Indexbasis 100)")
+            normalized = (all_close / all_close.iloc[0]) * 100
+            fig_norm = go.Figure()
+            for col in normalized.columns:
+                fig_norm.add_trace(go.Scatter(
+                    x=normalized.index, y=normalized[col],
+                    name=col, mode="lines", line=dict(width=1),
+                ))
+            fig_norm.add_hline(y=100, line_dash="dash", line_color="black", opacity=0.3)
+            fig_norm.update_layout(height=450, yaxis_title="Index (Start = 100)", hovermode="x unified",
+                                   legend=dict(orientation="h", yanchor="bottom", y=1.02))
+            st.plotly_chart(fig_norm, use_container_width=True)
+        else:
+            st.warning("Nicht genügend gemeinsame Handelstage für Korrelationsanalyse.")
 
 # ---------------------------------------------------------------------------
 # Page: Nachrichten
@@ -405,7 +548,7 @@ elif page == "Nachrichten":
 
     with tab1:
         if news_eodhd:
-            pair = st.selectbox("Waehrungspaar", list(news_eodhd.keys()), format_func=lambda x: PAIR_LABELS.get(x, x))
+            pair = st.selectbox("Währungspaar", list(news_eodhd.keys()), format_func=lambda x: PAIR_LABELS.get(x, x))
             df_news = news_eodhd[pair]
 
             col1, col2, col3 = st.columns(3)
@@ -439,7 +582,7 @@ elif page == "Nachrichten":
     with tab2:
         if not news_scraping.empty:
             col1, col2 = st.columns(2)
-            col1.metric("Total Eintraege", len(news_scraping))
+            col1.metric("Total Einträge", len(news_scraping))
             col2.metric("Quellen", news_scraping["source"].nunique() if "source" in news_scraping.columns else "?")
 
             if "source" in news_scraping.columns:
@@ -462,7 +605,7 @@ elif page == "Nachrichten":
 elif page == "Eigene Grafik":
     st.title("Eigene Grafik erstellen")
 
-    pair = st.selectbox("Waehrungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
+    pair = st.selectbox("Währungspaar", PAIRS, format_func=lambda x: PAIR_LABELS[x])
     pair_data = df_combined[df_combined["pair"] == pair]
     pair_data = pair_data[~pair_data["is_weekend"]]
 
@@ -522,7 +665,7 @@ elif page == "Eigene Grafik":
             fig.add_trace(go.Scatter(x=returns.index, y=returns, name=source.capitalize(), mode="lines",
                                      line=dict(width=0.8)))
         fig.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.3)
-        fig.update_layout(height=500, title=f"{PAIR_LABELS[pair]} - Taegliche Renditen", yaxis_title="Rendite",
+        fig.update_layout(height=500, title=f"{PAIR_LABELS[pair]} - Tägliche Renditen", yaxis_title="Rendite",
                           hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -562,7 +705,7 @@ elif page == "Eigene Grafik":
                         corr_table[f"{src_a} vs {src_b}"] = returns[src_a].rolling(window).corr(returns[src_b])
                 st.dataframe(corr_table.dropna(how="all").round(6), use_container_width=True, height=300)
         else:
-            st.info("Mindestens 2 Quellen auswaehlen.")
+            st.info("Mindestens 2 Quellen auswählen.")
 
     elif chart_type == "Boxplot":
         col_type = st.selectbox("Preis-Typ", ["close", "open", "high", "low"], key="box_col")
