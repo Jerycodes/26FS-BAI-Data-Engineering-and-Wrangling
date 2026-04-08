@@ -69,7 +69,7 @@ Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quel
 
 ### News-Sentiment handling
 - EODHD news per pair is filtered defensively by the canonical FX symbol (`EURUSD.FOREX`, `EURCHF.FOREX`, `GBPUSD.FOREX`) via the `symbols` column — both in the notebook and the dashboard.
-- Daily aggregation uses **median** (not mean) of `polarity`, more robust to outliers.
+- Daily aggregation uses **median** (not mean) of `polarity` in both the notebook (`load_news` in `news_forex_korrelation_kombiniert.ipynb`) and the dashboard's Master Grafik — more robust to outliers.
 - Missing days (≈8–10% for EUR_USD/GBP_USD, mostly weekends/holidays) are **kept as NaN** — sentiment is not interpolated. Weekly/monthly resampling handles them automatically.
 - **EUR_CHF news coverage from EODHD is essentially absent** (~12 articles total) — sentiment for that pair is not meaningful.
 
