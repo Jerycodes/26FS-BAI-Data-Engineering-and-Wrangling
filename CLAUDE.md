@@ -29,6 +29,11 @@ Launch notebooks:
 jupyter notebook notebooks/
 ```
 
+Launch the Streamlit dashboard:
+```bash
+streamlit run dashboard.py
+```
+
 ## Architecture
 
 ### Data Flow
@@ -50,12 +55,26 @@ Each loader is a standalone script (functional style, no classes) with module-le
 ### Notebooks (`notebooks/`)
 Organized into subdirectories:
 - `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–04), one per data source
-- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks (e.g., `Test_datenanalyse.ipynb` covers webscraping news wrangling + MetaTrader EDA + cross-source comparison of Yahoo/EODHD/MetaTrader)
+- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks:
+  - `Test_datenanalyse.ipynb` — webscraping news wrangling + MetaTrader EDA + cross-source comparison
+  - `datenanalyse_forex.ipynb` — produces `data/processed/forex/forex_alle_quellen_kombiniert.csv` (long-format Yahoo/EODHD/MetaTrader merge with `pair`, `n_sources`, `has_gap`). Used by the dashboard.
+  - `datenanalyse_oil.ipynb` — WTI/Brent EDA
+  - `news_forex_korrelation.ipynb` — News-vs-Forex correlation, loads raw Yahoo + EODHD per pair
+  - `news_forex_korrelation_kombiniert.ipynb` — Same analysis but builds its own combined CSV (`forex_kombiniert_v2.csv`) from raw, then writes a single processed long-format CSV (`forex_verarbeitet_v2.csv`). Includes oil overlay (Schritt 4b) and a sentiment-diagnose section (Schritt 3b)
 
 German markdown documentation, English code. Use `seaborn-v0_8` plot style.
 
+### Dashboard (`dashboard.py`)
+Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quellenvergleich`, `Lückenanalyse`, `Preisabweichungen`, `Ölpreise`, `Nachrichten`, `Eigene Grafik`, `Master Grafik`). The `Master Grafik` page lets the user freely combine pairs, sources, oil tickers, and EODHD sentiment with aggregation (D/W/M/Q), aggregation function, optional interpolation, normalization, and a tag filter. Loads `data/processed/forex/forex_alle_quellen_kombiniert.csv`.
+
+### News-Sentiment handling
+- EODHD news per pair is filtered defensively by the canonical FX symbol (`EURUSD.FOREX`, `EURCHF.FOREX`, `GBPUSD.FOREX`) via the `symbols` column — both in the notebook and the dashboard.
+- Daily aggregation uses **median** (not mean) of `polarity`, more robust to outliers.
+- Missing days (≈8–10% for EUR_USD/GBP_USD, mostly weekends/holidays) are **kept as NaN** — sentiment is not interpolated. Weekly/monthly resampling handles them automatically.
+- **EUR_CHF news coverage from EODHD is essentially absent** (~12 articles total) — sentiment for that pair is not meaningful.
+
 ### Data Layout
-All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/` and `data/final/` are scaffolded but not yet populated.
+All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb`, **not** by a loader script — must be regenerated when raw data changes) and the `_v2` outputs from `news_forex_korrelation_kombiniert.ipynb`. Additionally, oil prices live under `data/raw/oil/yahoo/`.
 
 Within `raw/`:
 - `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
