@@ -139,6 +139,7 @@ page = st.sidebar.radio("Navigation", [
     "Ölpreise",
     "Nachrichten",
     "Eigene Grafik",
+    "Master Grafik",
 ])
 
 # ---------------------------------------------------------------------------
@@ -730,3 +731,225 @@ elif page == "Eigene Grafik":
                 else:
                     box_table[source] = pair_data[f"{source}_{col_type}"].pct_change()
             st.dataframe(box_table.dropna(how="all").round(6), use_container_width=True, height=300)
+
+# ---------------------------------------------------------------------------
+# Page: Master Grafik
+# ---------------------------------------------------------------------------
+elif page == "Master Grafik":
+    st.title("Master Grafik")
+    st.caption("Eine Grafik für alles: Forex, Öl und News-Sentiment frei kombinierbar mit Zeitraum, Aggregation und Normalisierung.")
+
+    # ----- Sidebar-Steuerelemente -----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Master Grafik Einstellungen")
+
+    sel_pairs = st.sidebar.multiselect(
+        "Währungspaare",
+        PAIRS,
+        default=["EUR_USD"],
+        format_func=lambda x: PAIR_LABELS[x],
+    )
+    fx_source = st.sidebar.selectbox(
+        "Forex-Quelle",
+        ["mittelwert", "yahoo", "eodhd"],
+        help="'mittelwert' = Mittelwert aus yahoo + eodhd (nur wo beide vorhanden)",
+    )
+    fx_field = st.sidebar.selectbox("Forex-Feld", ["close", "open", "high", "low"])
+
+    sel_oils = st.sidebar.multiselect(
+        "Ölpreise",
+        OIL_TICKERS,
+        default=[],
+        format_func=lambda x: OIL_LABELS[x],
+    )
+
+    show_sentiment = st.sidebar.checkbox("News-Sentiment (EODHD polarity) anzeigen", value=True)
+    sentiment_per_pair = st.sidebar.checkbox(
+        "Sentiment pro Paar (sonst Mittel über gewählte Paare)",
+        value=True,
+        disabled=not show_sentiment,
+    )
+
+    freq_label = st.sidebar.selectbox(
+        "Aggregation (Auflösung)",
+        ["Täglich", "Wöchentlich", "Monatlich", "Quartalsweise"],
+    )
+    freq_map = {"Täglich": "D", "Wöchentlich": "W-MON", "Monatlich": "MS", "Quartalsweise": "QS"}
+    freq = freq_map[freq_label]
+
+    agg_label = st.sidebar.selectbox(
+        "Aggregations-Funktion",
+        ["Mittelwert", "Median", "Letzter Wert", "Min", "Max", "Summe"],
+        help="Wie die täglichen Werte zu Wochen/Monaten/... zusammengefasst werden.",
+    )
+    agg_map = {"Mittelwert": "mean", "Median": "median", "Letzter Wert": "last", "Min": "min", "Max": "max", "Summe": "sum"}
+    agg_func = agg_map[agg_label]
+
+    fill_gaps = st.sidebar.checkbox(
+        "Fehlende Tage interpolieren (linear, vor Aggregation)",
+        value=False,
+        help="Wochenenden/Feiertage werden zeitgewichtet linear gefüllt – nur sinnvoll bei täglicher Auflösung.",
+    )
+    normalize = st.sidebar.checkbox(
+        "Normalisieren (Index = 100 am Startdatum)",
+        value=False,
+        help="Macht Reihen mit unterschiedlichen Skalen vergleichbar.",
+    )
+
+    # Zeitraum aus den verfügbaren Daten ableiten
+    min_date = df_combined.index.min().date()
+    max_date = df_combined.index.max().date()
+    date_range = st.sidebar.date_input(
+        "Zeitraum",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        key="master_date",
+    )
+
+    # ----- Daten zusammenstellen -----
+    def get_fx_series(pair: str) -> pd.Series:
+        sub = df_combined[df_combined["pair"] == pair]
+        if fx_source == "mittelwert":
+            yh = sub.get(f"yahoo_{fx_field}")
+            ed = sub.get(f"eodhd_{fx_field}")
+            if yh is None or ed is None:
+                return pd.Series(dtype=float)
+            both = pd.concat([yh, ed], axis=1)
+            return both.mean(axis=1, skipna=False).dropna()
+        col = f"{fx_source}_{fx_field}"
+        if col not in sub.columns:
+            return pd.Series(dtype=float)
+        return sub[col].dropna()
+
+    def get_oil_series(ticker: str) -> pd.Series:
+        df = oil_data.get(ticker)
+        if df is None or df.empty:
+            return pd.Series(dtype=float)
+        for c in ["close", "Close"]:
+            if c in df.columns:
+                return df[c].dropna()
+        return pd.Series(dtype=float)
+
+    def get_sentiment_series(pair: str) -> pd.Series:
+        df = news_eodhd.get(pair)
+        if df is None or df.empty or "polarity" not in df.columns:
+            return pd.Series(dtype=float)
+        s = df.dropna(subset=["date_only"]).groupby("date_only")["polarity"].mean()
+        s.index = pd.to_datetime(s.index)
+        return s
+
+    # Spalten in einem DataFrame sammeln
+    series_dict: dict[str, pd.Series] = {}
+    for p in sel_pairs:
+        s = get_fx_series(p)
+        if not s.empty:
+            series_dict[f"{PAIR_LABELS[p]} {fx_field} ({fx_source})"] = s
+    for o in sel_oils:
+        s = get_oil_series(o)
+        if not s.empty:
+            series_dict[f"{OIL_LABELS[o]} close"] = s
+    if show_sentiment and sel_pairs:
+        if sentiment_per_pair:
+            for p in sel_pairs:
+                s = get_sentiment_series(p)
+                if not s.empty:
+                    series_dict[f"Sentiment {PAIR_LABELS[p]}"] = s
+        else:
+            parts = [get_sentiment_series(p) for p in sel_pairs]
+            parts = [p for p in parts if not p.empty]
+            if parts:
+                merged = pd.concat(parts, axis=1).mean(axis=1)
+                series_dict[f"Sentiment Mittel ({len(parts)} Paare)"] = merged
+
+    if not series_dict:
+        st.warning("Keine Reihen ausgewählt – bitte mindestens ein Paar oder einen Ölpreis wählen.")
+        st.stop()
+
+    df_master = pd.concat(series_dict, axis=1).sort_index()
+    df_master.index = pd.to_datetime(df_master.index)
+
+    # Zeitraum-Filter
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+        df_master = df_master.loc[(df_master.index >= start) & (df_master.index <= end)]
+
+    if df_master.empty:
+        st.warning("Keine Daten im gewählten Zeitraum.")
+        st.stop()
+
+    # Optional interpolieren (vor Aggregation)
+    if fill_gaps:
+        full_idx = pd.date_range(df_master.index.min(), df_master.index.max(), freq="D")
+        df_master = df_master.reindex(full_idx).interpolate(method="time")
+        df_master.index.name = "date"
+
+    # Aggregation
+    if freq != "D":
+        df_master = df_master.resample(freq).agg(agg_func)
+
+    # Normalisierung (Index = 100 am ersten gültigen Wert pro Reihe)
+    if normalize:
+        first_valid = df_master.apply(lambda c: c.dropna().iloc[0] if c.dropna().size else np.nan)
+        df_master = df_master.divide(first_valid).multiply(100)
+
+    # ----- Plot -----
+    # Sentiment-Spalten auf eigene Sekundärachse, alles andere auf Hauptachse.
+    # Bei Normalisierung landet alles auf einer Achse.
+    sentiment_cols = [c for c in df_master.columns if c.startswith("Sentiment")]
+    other_cols     = [c for c in df_master.columns if c not in sentiment_cols]
+
+    use_secondary = bool(sentiment_cols) and not normalize
+    fig = make_subplots(specs=[[{"secondary_y": use_secondary}]])
+
+    for col in other_cols:
+        fig.add_trace(
+            go.Scatter(x=df_master.index, y=df_master[col], name=col, mode="lines"),
+            secondary_y=False,
+        )
+    for col in sentiment_cols:
+        fig.add_trace(
+            go.Scatter(x=df_master.index, y=df_master[col], name=col, mode="lines",
+                       line=dict(dash="dot")),
+            secondary_y=use_secondary,
+        )
+
+    title_bits = [
+        f"{len(sel_pairs)} Paar(e)" if sel_pairs else "",
+        f"{len(sel_oils)} Öl" if sel_oils else "",
+        freq_label,
+        agg_label,
+        "normalisiert" if normalize else "",
+    ]
+    fig.update_layout(
+        height=600,
+        title=" · ".join(b for b in title_bits if b),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.update_yaxes(title_text="Index (Start = 100)" if normalize else "Wert", secondary_y=False)
+    if use_secondary:
+        fig.update_yaxes(title_text="Sentiment (polarity)", secondary_y=True)
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ----- Korrelations- und Datentabelle -----
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Pearson-Korrelation")
+        if df_master.shape[1] >= 2:
+            st.dataframe(df_master.corr().round(3), use_container_width=True)
+        else:
+            st.info("Mindestens 2 Reihen für eine Korrelation nötig.")
+    with col2:
+        st.subheader("Statistik")
+        st.dataframe(df_master.describe().round(4), use_container_width=True)
+
+    with st.expander("Aggregierte Daten anzeigen"):
+        st.dataframe(df_master.round(6), use_container_width=True, height=400)
+        st.download_button(
+            "Als CSV herunterladen",
+            df_master.to_csv().encode("utf-8"),
+            file_name="master_grafik.csv",
+            mime="text/csv",
+        )
