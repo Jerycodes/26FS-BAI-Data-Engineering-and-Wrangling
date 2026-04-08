@@ -878,7 +878,8 @@ elif page == "Master Grafik":
             df = df[df["tags_list"].apply(lambda l: bool(set(l) & tag_set))]
         if df.empty:
             return pd.Series(dtype=float)
-        s = df.dropna(subset=["date_only"]).groupby("date_only")["polarity"].mean()
+        # Median pro Tag (robuster gegen einzelne extreme Artikel als der Mittelwert)
+        s = df.dropna(subset=["date_only"]).groupby("date_only")["polarity"].median()
         s.index = pd.to_datetime(s.index)
         return s
 
