@@ -883,28 +883,37 @@ elif page == "Master Grafik":
         s.index = pd.to_datetime(s.index)
         return s
 
-    # Spalten in einem DataFrame sammeln
+    # Spalten in einem DataFrame sammeln, plus Kategorie-Mapping für die Achsenzuordnung
     series_dict: dict[str, pd.Series] = {}
+    series_category: dict[str, str] = {}  # label -> 'forex' | 'oil' | 'sentiment'
     for p in sel_pairs:
         s = get_fx_series(p)
         if not s.empty:
-            series_dict[f"{PAIR_LABELS[p]} {fx_field} ({fx_source})"] = s
+            label = f"{PAIR_LABELS[p]} {fx_field} ({fx_source})"
+            series_dict[label] = s
+            series_category[label] = "forex"
     for o in sel_oils:
         s = get_oil_series(o)
         if not s.empty:
-            series_dict[f"{OIL_LABELS[o]} close"] = s
+            label = f"{OIL_LABELS[o]} close"
+            series_dict[label] = s
+            series_category[label] = "oil"
     if show_sentiment and sel_pairs:
         if sentiment_per_pair:
             for p in sel_pairs:
                 s = get_sentiment_series(p)
                 if not s.empty:
-                    series_dict[f"Sentiment {PAIR_LABELS[p]}"] = s
+                    label = f"Sentiment {PAIR_LABELS[p]}"
+                    series_dict[label] = s
+                    series_category[label] = "sentiment"
         else:
             parts = [get_sentiment_series(p) for p in sel_pairs]
             parts = [p for p in parts if not p.empty]
             if parts:
                 merged = pd.concat(parts, axis=1).mean(axis=1)
-                series_dict[f"Sentiment Mittel ({len(parts)} Paare)"] = merged
+                label = f"Sentiment Mittel ({len(parts)} Paare)"
+                series_dict[label] = merged
+                series_category[label] = "sentiment"
 
     if not series_dict:
         st.warning("Keine Reihen ausgewählt – bitte mindestens ein Paar oder einen Ölpreis wählen.")
@@ -937,26 +946,70 @@ elif page == "Master Grafik":
         first_valid = df_master.apply(lambda c: c.dropna().iloc[0] if c.dropna().size else np.nan)
         df_master = df_master.divide(first_valid).multiply(100)
 
-    # ----- Plot -----
-    # Sentiment-Spalten auf eigene Sekundärachse, alles andere auf Hauptachse.
-    # Bei Normalisierung landet alles auf einer Achse.
-    sentiment_cols = [c for c in df_master.columns if c.startswith("Sentiment")]
-    other_cols     = [c for c in df_master.columns if c not in sentiment_cols]
+    # ----- Plot mit dynamisch vielen Y-Achsen -----
+    # Bei Normalisierung sind alle Reihen vergleichbar -> eine Achse.
+    # Sonst kriegt jede vorhandene Kategorie (forex / oil / sentiment) eine eigene Y-Achse,
+    # damit Reihen mit sehr unterschiedlichen Skalen (z.B. EUR/USD ~1.3 vs. Brent ~80 vs. Sentiment ~0.1)
+    # alle gut sichtbar bleiben.
+    CATEGORY_INFO = {
+        "forex":     {"title": f"Forex-Kurs ({fx_field})", "color": "#1f77b4", "dash": "solid"},
+        "oil":       {"title": "Öl (USD)",                 "color": "#2ca02c", "dash": "solid"},
+        "sentiment": {"title": "Sentiment (polarity)",     "color": "#d62728", "dash": "dot"},
+    }
 
-    use_secondary = bool(sentiment_cols) and not normalize
-    fig = make_subplots(specs=[[{"secondary_y": use_secondary}]])
+    fig = go.Figure()
 
-    for col in other_cols:
-        fig.add_trace(
-            go.Scatter(x=df_master.index, y=df_master[col], name=col, mode="lines"),
-            secondary_y=False,
-        )
-    for col in sentiment_cols:
-        fig.add_trace(
-            go.Scatter(x=df_master.index, y=df_master[col], name=col, mode="lines",
-                       line=dict(dash="dot")),
-            secondary_y=use_secondary,
-        )
+    if normalize:
+        # Eine Achse, alles vergleichbar
+        for col in df_master.columns:
+            cat = series_category.get(col, "forex")
+            fig.add_trace(go.Scatter(
+                x=df_master.index, y=df_master[col], name=col, mode="lines",
+                line=dict(dash=CATEGORY_INFO[cat]["dash"]),
+            ))
+        fig.update_layout(yaxis=dict(title="Index (Start = 100)"))
+    else:
+        # Welche Kategorien sind tatsächlich vorhanden? Reihenfolge bestimmt die Achsenzuordnung.
+        cats_present = [c for c in ["forex", "oil", "sentiment"] if c in series_category.values()]
+        # cat -> ('y', 'y2', 'y3')
+        cat_to_axis = {cat: f"y{i+1}" if i > 0 else "y" for i, cat in enumerate(cats_present)}
+
+        for col in df_master.columns:
+            cat = series_category.get(col, "forex")
+            info = CATEGORY_INFO[cat]
+            fig.add_trace(go.Scatter(
+                x=df_master.index, y=df_master[col], name=col, mode="lines",
+                yaxis=cat_to_axis[cat],
+                line=dict(dash=info["dash"]),
+            ))
+
+        # Achsen-Layout: Hauptachse links, weitere Achsen rechts mit Versatz
+        layout_axes: dict = {}
+        # X-Achse einschränken, damit rechts Platz für 1-2 zusätzliche Achsen ist
+        n_extra = max(0, len(cats_present) - 1)
+        right_padding = 0.06 * n_extra
+        layout_axes["xaxis"] = dict(domain=[0.0, max(0.7, 1.0 - right_padding)])
+
+        for i, cat in enumerate(cats_present):
+            info = CATEGORY_INFO[cat]
+            if i == 0:
+                layout_axes["yaxis"] = dict(
+                    title=dict(text=info["title"], font=dict(color=info["color"])),
+                    tickfont=dict(color=info["color"]),
+                )
+            else:
+                position = 1.0 - 0.06 * (i - 1)
+                layout_axes[f"yaxis{i+1}"] = dict(
+                    title=dict(text=info["title"], font=dict(color=info["color"])),
+                    tickfont=dict(color=info["color"]),
+                    overlaying="y",
+                    side="right",
+                    anchor="free" if i > 1 else "x",
+                    position=position if i > 1 else None,
+                    showgrid=False,
+                )
+
+        fig.update_layout(**layout_axes)
 
     title_bits = [
         f"{len(sel_pairs)} Paar(e)" if sel_pairs else "",
@@ -971,9 +1024,6 @@ elif page == "Master Grafik":
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
-    fig.update_yaxes(title_text="Index (Start = 100)" if normalize else "Wert", secondary_y=False)
-    if use_secondary:
-        fig.update_yaxes(title_text="Sentiment (polarity)", secondary_y=True)
 
     st.plotly_chart(fig, use_container_width=True)
 
