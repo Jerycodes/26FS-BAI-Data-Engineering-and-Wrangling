@@ -90,6 +90,24 @@ def load_oil_data():
 
 @st.cache_data
 def load_news_eodhd():
+    """Lädt EODHD-News pro Paar und filtert defensiv nach dem kanonischen FX-Symbol.
+
+    Parst ausserdem `symbols` und `tags` zu echten Listen, damit das Dashboard
+    nach Tags filtern kann.
+    """
+    import ast
+
+    def _parse(val):
+        if isinstance(val, list):
+            return val
+        if not isinstance(val, str) or not val.strip():
+            return []
+        try:
+            return ast.literal_eval(val)
+        except (ValueError, SyntaxError):
+            return []
+
+    pair_symbol = {"EUR_USD": "EURUSD.FOREX", "EUR_CHF": "EURCHF.FOREX", "GBP_USD": "GBPUSD.FOREX"}
     dfs = {}
     for pair in PAIRS:
         files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "news", "eodhd", f"{pair}_news_*.csv")))
@@ -97,6 +115,10 @@ def load_news_eodhd():
             df = pd.read_csv(files[-1])
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df["date_only"] = pd.to_datetime(df["date_only"], errors="coerce")
+            df["symbols_list"] = df["symbols"].apply(_parse)
+            df["tags_list"] = df["tags"].apply(_parse)
+            sym = pair_symbol[pair]
+            df = df[df["symbols_list"].apply(lambda l: sym in l)].reset_index(drop=True)
             dfs[pair] = df
     return dfs
 
@@ -770,6 +792,22 @@ elif page == "Master Grafik":
         disabled=not show_sentiment,
     )
 
+    # Tag-Filter aufbauen aus allen verfügbaren Tags der gewählten Paare
+    available_tags: set[str] = set()
+    if show_sentiment:
+        for p in sel_pairs:
+            df_n = news_eodhd.get(p)
+            if df_n is not None and "tags_list" in df_n.columns:
+                for lst in df_n["tags_list"]:
+                    available_tags.update(lst)
+    sel_tags = st.sidebar.multiselect(
+        "News-Tags filtern (leer = alle)",
+        sorted(available_tags),
+        default=[],
+        disabled=not show_sentiment,
+        help="Ein Artikel zählt, wenn seine Tag-Liste mindestens einen der gewählten Tags enthält.",
+    )
+
     freq_label = st.sidebar.selectbox(
         "Aggregation (Auflösung)",
         ["Täglich", "Wöchentlich", "Monatlich", "Quartalsweise"],
@@ -834,6 +872,11 @@ elif page == "Master Grafik":
     def get_sentiment_series(pair: str) -> pd.Series:
         df = news_eodhd.get(pair)
         if df is None or df.empty or "polarity" not in df.columns:
+            return pd.Series(dtype=float)
+        if sel_tags:
+            tag_set = set(sel_tags)
+            df = df[df["tags_list"].apply(lambda l: bool(set(l) & tag_set))]
+        if df.empty:
             return pd.Series(dtype=float)
         s = df.dropna(subset=["date_only"]).groupby("date_only")["polarity"].mean()
         s.index = pd.to_datetime(s.index)
