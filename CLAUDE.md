@@ -8,10 +8,12 @@ Academic Data Engineering & Wrangling project (FHNW, course 26FS BAI). Analyzes 
 
 ## Environment Setup
 
-- Python 3.12.6 with virtual environment in `.venv/`
+- Python 3.12 (pinned via `.python-version`) with virtual environment in `.venv/`
 - Activate: `source .venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
-- Copy `.env.example` to `.env` and add EODHD API key
+- Key dependencies: `pandas`, `yfinance`, `requests`, `feedparser`, `beautifulsoup4`, `textblob`, `plotly`, `seaborn`, `streamlit>=1.45.0`
+- Copy `.env.example` to `.env` and add EODHD API key (also has MetaTrader 5 login fields)
+- Streamlit theme config in `.streamlit/config.toml` (dark theme, headless)
 - No test framework, linter, or build system is configured
 
 ## Running Code
@@ -54,7 +56,7 @@ Each loader is a standalone script (functional style, no classes) with module-le
 
 ### Notebooks (`notebooks/`)
 Organized into subdirectories:
-- `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–04), one per data source
+- `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–05), one per data source (05 = oil/Yahoo)
 - `notebooks/datenverarbeitung/` — Data processing/analysis notebooks:
   - `Test_datenanalyse.ipynb` — webscraping news wrangling + MetaTrader EDA + cross-source comparison
   - `datenanalyse_forex.ipynb` — produces `data/processed/forex/forex_alle_quellen_kombiniert.csv` (long-format Yahoo/EODHD/MetaTrader merge with `pair`, `n_sources`, `has_gap`). Used by the dashboard.

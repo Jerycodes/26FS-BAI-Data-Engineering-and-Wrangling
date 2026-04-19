@@ -6,6 +6,7 @@ python-dotenv
 # Datenverarbeitung
 pandas
 numpy
+scipy
 
 # Sentiment Analyse
 textblob

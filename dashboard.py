@@ -160,6 +160,7 @@ page = st.sidebar.radio("Navigation", [
     "Preisabweichungen",
     "Ölpreise",
     "Nachrichten",
+    "Sentiment-Vergleich",
     "Eigene Grafik",
     "Master Grafik",
 ])
@@ -621,6 +622,110 @@ elif page == "Nachrichten":
             st.dataframe(news_scraping[display_cols].head(100), use_container_width=True, height=400)
         else:
             st.info("Keine Webscraping News-Daten vorhanden.")
+
+# ---------------------------------------------------------------------------
+# Page: Sentiment-Vergleich
+# ---------------------------------------------------------------------------
+elif page == "Sentiment-Vergleich":
+    st.title("Sentiment-Vergleich: EODHD vs. TextBlob")
+    st.caption("Vergleich der vorberechneten EODHD-Polarity mit eigener TextBlob-Sentiment-Analyse auf dem Artikeltext.")
+
+    from textblob import TextBlob
+
+    @st.cache_data
+    def compute_textblob_sentiment():
+        """Berechnet TextBlob-Sentiment auf EODHD-Artikeltext für alle Paare."""
+        results = {}
+        for pair in PAIRS:
+            if pair not in news_eodhd or news_eodhd[pair].empty:
+                continue
+            df = news_eodhd[pair].copy()
+            # TextBlob auf title + content
+            df["tb_title"] = df["title"].apply(
+                lambda t: TextBlob(str(t)).sentiment.polarity if isinstance(t, str) and t.strip() else np.nan
+            )
+            df["tb_content"] = df["content"].apply(
+                lambda t: TextBlob(str(t)).sentiment.polarity if isinstance(t, str) and t.strip() else np.nan
+            )
+            df["tb_combined"] = df[["tb_title", "tb_content"]].mean(axis=1)
+            results[pair] = df
+        return results
+
+    with st.spinner("TextBlob-Sentiment wird berechnet (dauert beim ersten Mal)..."):
+        tb_data = compute_textblob_sentiment()
+
+    pair = st.selectbox("Währungspaar", [p for p in PAIRS if p in tb_data],
+                        format_func=lambda x: PAIR_LABELS[x], key="sv_pair")
+
+    if pair in tb_data:
+        df = tb_data[pair]
+
+        # --- Tagesverlauf: Mean und Median ---
+        st.subheader("Tagesverlauf: EODHD vs. TextBlob Polarity")
+        agg_func = st.radio("Aggregation", ["Median", "Mittelwert"], horizontal=True, key="sv_agg")
+        func = "median" if agg_func == "Median" else "mean"
+
+        daily = df.groupby("date_only").agg(
+            eodhd_polarity=("polarity", func),
+            textblob_polarity=("tb_combined", func),
+        ).sort_index().dropna()
+
+        fig_daily = go.Figure()
+        fig_daily.add_trace(go.Scatter(
+            x=daily.index, y=daily["eodhd_polarity"],
+            name="EODHD (vorberechnet)", line=dict(color="orange", width=1),
+        ))
+        fig_daily.add_trace(go.Scatter(
+            x=daily.index, y=daily["textblob_polarity"],
+            name="TextBlob (eigene Analyse)", line=dict(color="royalblue", width=1),
+        ))
+        fig_daily.add_hline(y=0, line_dash="dash", line_color="grey", line_width=0.5)
+        fig_daily.update_layout(
+            height=450,
+            title=f"{PAIR_LABELS[pair]} – Tägliche Polarity ({agg_func})",
+            yaxis_title="Polarity",
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig_daily, use_container_width=True)
+
+        # --- Korrelation ---
+        r = daily["eodhd_polarity"].corr(daily["textblob_polarity"])
+        st.metric("Pearson-Korrelation (Tagesebene)", f"{r:.4f}", delta=None)
+
+        # --- Scatter Plot ---
+        st.subheader("Artikel-Ebene: EODHD vs. TextBlob Polarity")
+        scatter_df = df.dropna(subset=["polarity", "tb_combined"])
+        fig_scatter = px.scatter(
+            scatter_df, x="polarity", y="tb_combined",
+            opacity=0.1,
+            labels={"polarity": "EODHD Polarity", "tb_combined": "TextBlob Polarity"},
+            title=f"{PAIR_LABELS[pair]} – Artikel-Sentiment (n={len(scatter_df)})",
+        )
+        fig_scatter.add_shape(type="line", x0=-1, y0=-1, x1=1, y1=1,
+                              line=dict(color="red", dash="dash", width=1))
+        fig_scatter.update_layout(height=500)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+        # --- Verteilung ---
+        st.subheader("Verteilung der Polarity-Werte")
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_hist_e = px.histogram(scatter_df, x="polarity", nbins=50,
+                                      title="EODHD (vorberechnet)", color_discrete_sequence=["orange"])
+            st.plotly_chart(fig_hist_e, use_container_width=True)
+        with col2:
+            fig_hist_t = px.histogram(scatter_df, x="tb_combined", nbins=50,
+                                      title="TextBlob (eigene Analyse)", color_discrete_sequence=["royalblue"])
+            st.plotly_chart(fig_hist_t, use_container_width=True)
+
+        # --- Statistik ---
+        st.subheader("Statistik")
+        stats = pd.DataFrame({
+            "EODHD": scatter_df["polarity"].describe(),
+            "TextBlob": scatter_df["tb_combined"].describe(),
+        }).round(4)
+        st.dataframe(stats, use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # Page: Eigene Grafik
