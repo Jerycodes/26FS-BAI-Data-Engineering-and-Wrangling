@@ -20,7 +20,7 @@ def load_api_key():
     return api_key
 
 
-def load_news(ticker, start_date, end_date, api_key, limit=300):
+def load_news(ticker, start_date, end_date, api_key, limit=1000):
     all_articles = []
     offset = 0
     
@@ -64,8 +64,8 @@ if __name__ == "__main__":
         "GBPUSD.FOREX": "GBP_USD",
     }
     
-    START_DATE = "2024-01-01"
-    END_DATE = "2025-12-31"
+    START_DATE = "2022-01-01"
+    END_DATE = "2026-04-22"
     OUTPUT_DIR = "data/raw/news/eodhd"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     

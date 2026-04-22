@@ -126,6 +126,7 @@ def load_news_eodhd():
 @st.cache_data
 def load_news_webscraping():
     files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "news", "webscraping", "all_scraped_news_*.csv")))
+    files = [f for f in files if "PRE-FIX" not in f]
     if not files:
         return pd.DataFrame()
     dfs = []
@@ -135,6 +136,30 @@ def load_news_webscraping():
         dfs.append(df)
     df = pd.concat(dfs, ignore_index=True)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["date_only"] = pd.to_datetime(df["date_only"], errors="coerce")
+    # Deduplizieren nach Artikel-Link (gleicher Artikel in mehreren Scrapes)
+    df = df.drop_duplicates(subset="link", keep="first").reset_index(drop=True)
+    return df
+
+
+@st.cache_data
+def load_webscraping_sentiment_daily():
+    """Liest das aggregierte Tagesmedian-Sentiment aus dem PoC-Pipeline-Output."""
+    path = os.path.join(DATA_DIR, "processed", "news", "webscraping_sentiment_daily.csv")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path, index_col="date", parse_dates=True)
+    return df
+
+
+@st.cache_data
+def load_webscraping_articles_sentiment():
+    """Liest die unique Artikel mit TextBlob-Sentiment aus dem PoC-Pipeline-Output."""
+    path = os.path.join(DATA_DIR, "processed", "news", "webscraping_articles_sentiment.csv")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce", utc=True)
     df["date_only"] = pd.to_datetime(df["date_only"], errors="coerce")
     return df
 
@@ -147,6 +172,8 @@ raw_data = load_raw_sources()
 oil_data = load_oil_data()
 news_eodhd = load_news_eodhd()
 news_scraping = load_news_webscraping()
+webscraping_sent_daily = load_webscraping_sentiment_daily()
+webscraping_articles_sent = load_webscraping_articles_sentiment()
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -163,6 +190,7 @@ page = st.sidebar.radio("Navigation", [
     "Sentiment-Vergleich",
     "Eigene Grafik",
     "Master Grafik",
+    "Master Grafik 2",
 ])
 
 # ---------------------------------------------------------------------------
@@ -1151,4 +1179,300 @@ elif page == "Master Grafik":
             df_master.to_csv().encode("utf-8"),
             file_name="master_grafik.csv",
             mime="text/csv",
+        )
+
+# ---------------------------------------------------------------------------
+# Page: Master Grafik 2 — Proof of Concept: Webscraping-News + eigene Sentiment-Analyse
+# ---------------------------------------------------------------------------
+elif page == "Master Grafik 2":
+    st.title("Master Grafik 2 — Proof of Concept")
+    st.caption(
+        "Gleiche Methodik wie Master Grafik 1, aber mit **Webscraping-News** (RSS + Reddit) "
+        "und **eigener TextBlob-Sentiment-Analyse** statt EODHD. Forex/Oel bleiben identisch "
+        "(Yahoo + EODHD kombiniert). Dient dem Vergleich, ob der Zusammenhang in Master Grafik 1 "
+        "mit einer unabhaengigen Nachrichtenquelle reproduzierbar ist."
+    )
+
+    if webscraping_sent_daily.empty:
+        st.warning(
+            "Aggregiertes Webscraping-Sentiment fehlt. Bitte einmalig "
+            "`python scripts/regenerate_webscraping_sentiment.py` ausfuehren — das erzeugt "
+            "`data/processed/news/webscraping_sentiment_daily.csv`."
+        )
+        st.stop()
+
+    # ----- Sidebar -----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Master Grafik 2 Einstellungen")
+
+    sel_pairs2 = st.sidebar.multiselect(
+        "Währungspaare",
+        PAIRS,
+        default=["EUR_USD"],
+        format_func=lambda x: PAIR_LABELS[x],
+        key="mg2_pairs",
+    )
+    fx_source2 = st.sidebar.selectbox(
+        "Forex-Quelle",
+        ["mittelwert", "yahoo", "eodhd"],
+        help="'mittelwert' = Mittelwert aus yahoo + eodhd (nur wo beide vorhanden)",
+        key="mg2_fxsrc",
+    )
+    fx_field2 = st.sidebar.selectbox("Forex-Feld", ["close", "open", "high", "low"], key="mg2_field")
+
+    sel_oils2 = st.sidebar.multiselect(
+        "Ölpreise",
+        OIL_TICKERS,
+        default=[],
+        format_func=lambda x: OIL_LABELS[x],
+        key="mg2_oils",
+    )
+
+    show_sent2 = st.sidebar.checkbox(
+        "Eigenes TextBlob-Sentiment (Webscraping) anzeigen",
+        value=True,
+        key="mg2_sent",
+    )
+    sent_metric2 = st.sidebar.selectbox(
+        "Sentiment-Kennzahl",
+        ["polarity_median", "polarity_mean"],
+        help="Tagesmedian (robust) oder Tagesmittel.",
+        disabled=not show_sent2,
+        key="mg2_sentmetric",
+    )
+
+    # Quelle-Filter: arbeitet auf den Artikel-Level-Daten (deduppliziert)
+    available_src = (
+        sorted(webscraping_articles_sent["source"].dropna().unique().tolist())
+        if not webscraping_articles_sent.empty else []
+    )
+    sel_src2 = st.sidebar.multiselect(
+        "News-Quellen filtern (leer = alle)",
+        available_src,
+        default=[],
+        disabled=not show_sent2 or webscraping_articles_sent.empty,
+        help="Filtert Artikel pro Quelle (z.B. nur RSS ohne Reddit). Re-aggregiert Median on-the-fly.",
+        key="mg2_src",
+    )
+
+    freq_label2 = st.sidebar.selectbox(
+        "Aggregation (Auflösung)",
+        ["Täglich", "Wöchentlich", "Monatlich", "Quartalsweise"],
+        index=1,
+        key="mg2_freq",
+    )
+    freq_map2 = {"Täglich": "D", "Wöchentlich": "W-MON", "Monatlich": "MS", "Quartalsweise": "QS"}
+    freq2 = freq_map2[freq_label2]
+
+    agg_label2 = st.sidebar.selectbox(
+        "Aggregations-Funktion",
+        ["Mittelwert", "Median", "Letzter Wert", "Min", "Max", "Summe"],
+        key="mg2_agg",
+    )
+    agg_map2 = {"Mittelwert": "mean", "Median": "median", "Letzter Wert": "last", "Min": "min", "Max": "max", "Summe": "sum"}
+    agg_func2 = agg_map2[agg_label2]
+
+    fill_gaps2 = st.sidebar.checkbox(
+        "Fehlende Tage interpolieren (linear, vor Aggregation)",
+        value=False,
+        key="mg2_fill",
+    )
+    normalize2 = st.sidebar.checkbox(
+        "Normalisieren (Index = 100 am Startdatum)",
+        value=False,
+        key="mg2_norm",
+    )
+
+    # ----- Daten zusammenstellen -----
+    def get_fx_series2(pair: str) -> pd.Series:
+        sub = df_combined[df_combined["pair"] == pair]
+        if fx_source2 == "mittelwert":
+            yh = sub.get(f"yahoo_{fx_field2}")
+            ed = sub.get(f"eodhd_{fx_field2}")
+            if yh is None or ed is None:
+                return pd.Series(dtype=float)
+            return pd.concat([yh, ed], axis=1).mean(axis=1, skipna=False).dropna()
+        col = f"{fx_source2}_{fx_field2}"
+        if col not in sub.columns:
+            return pd.Series(dtype=float)
+        return sub[col].dropna()
+
+    def get_webscrape_sentiment_series() -> pd.Series:
+        """Liest das Tagesmedian-Sentiment; re-aggregiert wenn Quelle gefiltert wird."""
+        if sel_src2 and not webscraping_articles_sent.empty:
+            df = webscraping_articles_sent[webscraping_articles_sent["source"].isin(sel_src2)]
+            df = df.dropna(subset=["date", "polarity_tb"])
+            if df.empty:
+                return pd.Series(dtype=float)
+            df = df.copy()
+            df["date_norm"] = df["date"].dt.tz_convert(None).dt.normalize()
+            agg_fn = "median" if sent_metric2 == "polarity_median" else "mean"
+            s = df.groupby("date_norm")["polarity_tb"].agg(agg_fn)
+            s.index = pd.to_datetime(s.index)
+            return s
+        if webscraping_sent_daily.empty or sent_metric2 not in webscraping_sent_daily.columns:
+            return pd.Series(dtype=float)
+        return webscraping_sent_daily[sent_metric2].dropna()
+
+    series_dict2: dict[str, pd.Series] = {}
+    series_category2: dict[str, str] = {}
+    for p in sel_pairs2:
+        s = get_fx_series2(p)
+        if not s.empty:
+            label = f"{PAIR_LABELS[p]} {fx_field2} ({fx_source2})"
+            series_dict2[label] = s
+            series_category2[label] = "forex"
+    for o in sel_oils2:
+        df = oil_data.get(o)
+        if df is not None and not df.empty:
+            for c in ["close", "Close"]:
+                if c in df.columns:
+                    label = f"{OIL_LABELS[o]} close"
+                    series_dict2[label] = df[c].dropna()
+                    series_category2[label] = "oil"
+                    break
+    if show_sent2:
+        s = get_webscrape_sentiment_series()
+        if not s.empty:
+            src_info = f"{len(sel_src2)} Quellen" if sel_src2 else f"alle {len(available_src)} Quellen"
+            label = f"Sentiment TextBlob ({sent_metric2.replace('polarity_', '')}, {src_info})"
+            series_dict2[label] = s
+            series_category2[label] = "sentiment"
+
+    if not series_dict2:
+        st.warning("Keine Reihen verfügbar – bitte mindestens ein Paar, Öl oder Sentiment aktivieren.")
+        st.stop()
+
+    df_master2 = pd.concat(series_dict2, axis=1).sort_index()
+    df_master2.index = pd.to_datetime(df_master2.index)
+
+    # Zeitraum-Auswahl über tatsächliche Daten
+    min_d = df_master2.index.min().date()
+    max_d = df_master2.index.max().date()
+    date_range2 = st.sidebar.date_input(
+        "Zeitraum",
+        value=(min_d, max_d),
+        min_value=min_d,
+        max_value=max_d,
+        key="mg2_date",
+    )
+    if isinstance(date_range2, tuple) and len(date_range2) == 2:
+        start, end = pd.to_datetime(date_range2[0]), pd.to_datetime(date_range2[1])
+        df_master2 = df_master2.loc[(df_master2.index >= start) & (df_master2.index <= end)]
+
+    if df_master2.empty:
+        st.warning("Keine Daten im gewählten Zeitraum.")
+        st.stop()
+
+    # Überlapp-Hinweis: Sentiment-Abdeckung ist durch Scrape-Reichweite begrenzt
+    fx_cols = [c for c, cat in series_category2.items() if cat == "forex"]
+    sn_cols = [c for c, cat in series_category2.items() if cat == "sentiment"]
+    if fx_cols and sn_cols:
+        overlap = df_master2[fx_cols + sn_cols].dropna(how="any")
+        if overlap.empty:
+            st.info(
+                "Forex und Webscraping-Sentiment haben im gewaehlten Zeitraum keine gemeinsamen Tage — "
+                "Korrelation ist nicht berechenbar. Zeitraum anpassen oder Woche/Monat als Aggregation waehlen."
+            )
+        else:
+            st.caption(f"Gemeinsame Tage Forex ↔ Sentiment: **{len(overlap)}**")
+
+    if fill_gaps2:
+        full_idx = pd.date_range(df_master2.index.min(), df_master2.index.max(), freq="D")
+        df_master2 = df_master2.reindex(full_idx).interpolate(method="time")
+        df_master2.index.name = "date"
+
+    if freq2 != "D":
+        df_master2 = df_master2.resample(freq2).agg(agg_func2)
+
+    if normalize2:
+        first_valid = df_master2.apply(lambda c: c.dropna().iloc[0] if c.dropna().size else np.nan)
+        df_master2 = df_master2.divide(first_valid).multiply(100)
+
+    # ----- Plot mit separaten Y-Achsen pro Kategorie -----
+    CATEGORY_INFO2 = {
+        "forex":     {"title": f"Forex-Kurs ({fx_field2})",        "color": "#1f77b4", "dash": "solid"},
+        "oil":       {"title": "Öl (USD)",                          "color": "#2ca02c", "dash": "solid"},
+        "sentiment": {"title": "TextBlob-Polarity (Webscraping)",   "color": "#d62728", "dash": "dot"},
+    }
+
+    fig2 = go.Figure()
+    if normalize2:
+        for col in df_master2.columns:
+            cat = series_category2.get(col, "forex")
+            fig2.add_trace(go.Scatter(
+                x=df_master2.index, y=df_master2[col], name=col, mode="lines",
+                line=dict(dash=CATEGORY_INFO2[cat]["dash"]),
+            ))
+        fig2.update_layout(yaxis=dict(title="Index (Start = 100)"))
+    else:
+        cats_present = [c for c in ["forex", "oil", "sentiment"] if c in series_category2.values()]
+        cat_to_axis = {cat: f"y{i+1}" if i > 0 else "y" for i, cat in enumerate(cats_present)}
+        for col in df_master2.columns:
+            cat = series_category2.get(col, "forex")
+            info = CATEGORY_INFO2[cat]
+            fig2.add_trace(go.Scatter(
+                x=df_master2.index, y=df_master2[col], name=col, mode="lines",
+                yaxis=cat_to_axis[cat],
+                line=dict(dash=info["dash"]),
+            ))
+        layout_axes: dict = {}
+        n_extra = max(0, len(cats_present) - 1)
+        right_padding = 0.06 * n_extra
+        layout_axes["xaxis"] = dict(domain=[0.0, max(0.7, 1.0 - right_padding)])
+        for i, cat in enumerate(cats_present):
+            info = CATEGORY_INFO2[cat]
+            if i == 0:
+                layout_axes["yaxis"] = dict(
+                    title=dict(text=info["title"], font=dict(color=info["color"])),
+                    tickfont=dict(color=info["color"]),
+                )
+            else:
+                position = 1.0 - 0.06 * (i - 1)
+                layout_axes[f"yaxis{i+1}"] = dict(
+                    title=dict(text=info["title"], font=dict(color=info["color"])),
+                    tickfont=dict(color=info["color"]),
+                    overlaying="y",
+                    side="right",
+                    anchor="free" if i > 1 else "x",
+                    position=position if i > 1 else None,
+                    showgrid=False,
+                )
+        fig2.update_layout(**layout_axes)
+
+    title_bits2 = [
+        f"{len(sel_pairs2)} Paar(e)" if sel_pairs2 else "",
+        f"{len(sel_oils2)} Öl" if sel_oils2 else "",
+        "TextBlob-Sentiment" if show_sent2 else "",
+        freq_label2,
+        agg_label2,
+        "normalisiert" if normalize2 else "",
+    ]
+    fig2.update_layout(
+        height=600,
+        title=" · ".join(b for b in title_bits2 if b),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Pearson-Korrelation")
+        if df_master2.shape[1] >= 2 and df_master2.dropna(how="any").shape[0] >= 2:
+            st.dataframe(df_master2.corr().round(3), use_container_width=True)
+        else:
+            st.info("Zu wenige gemeinsame Beobachtungen für eine Korrelation.")
+    with col2:
+        st.subheader("Statistik")
+        st.dataframe(df_master2.describe().round(4), use_container_width=True)
+
+    with st.expander("Aggregierte Daten anzeigen"):
+        st.dataframe(df_master2.round(6), use_container_width=True, height=400)
+        st.download_button(
+            "Als CSV herunterladen",
+            df_master2.to_csv().encode("utf-8"),
+            file_name="master_grafik_2.csv",
+            mime="text/csv",
+            key="mg2_dl",
         )

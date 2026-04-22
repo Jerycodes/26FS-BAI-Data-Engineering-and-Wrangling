@@ -116,8 +116,8 @@ if __name__ == "__main__":
     }
     
     # Gleicher Zeitraum wie Yahoo Finance für Vergleich
-    START_DATE = "2024-01-01"
-    END_DATE = "2025-12-31"
+    START_DATE = "2022-01-01"
+    END_DATE = "2026-04-22"
     OUTPUT_DIR = "data/raw/forex/eodhd"
     
     # --- Daten laden und speichern ---

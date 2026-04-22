@@ -48,8 +48,15 @@ Each loader is a standalone script (functional style, no classes) with module-le
 
 - **yahoo_loader.py** — yfinance (no auth). Functions: `load_forex_data()`, `save_to_csv()`.
 - **eodhd_loader.py** — EODHD Forex API. Functions: `load_api_key()`, `load_forex_data()`, `save_to_csv()`. Requires `EODHD_API_KEY` from `.env`.
-- **eodhd_news_loader.py** — EODHD News API with offset-based pagination (limit=300). Functions: `load_api_key()`, `load_news()`. Saves both raw JSON and processed CSV to `data/raw/news/eodhd/`. Uses `pd.json_normalize()` to flatten sentiment dicts.
-- **webscraping_loader.py** — RSS feeds (feedparser) + Reddit JSON endpoint. Functions: `scrape_rss_feeds()`, `scrape_reddit()`. **Only saves CSV** (no raw JSON preservation yet).
+- **eodhd_news_loader.py** — EODHD News API with offset-based pagination (`limit=1000` to minimise calls). Functions: `load_api_key()`, `load_news()`. Saves both raw JSON and processed CSV to `data/raw/news/eodhd/`. Uses `pd.json_normalize()` to flatten sentiment dicts.
+- **webscraping_loader.py** — RSS feeds (feedparser) + Reddit JSON endpoint. Functions: `scrape_rss_feed()`, `scrape_rss_feeds()`, `scrape_reddit()`. Uses `requests.get()` → `feedparser.parse(response.text)` pattern to avoid SSL issues (validated in `notebooks/04_eda_news_webscraping_fenlin.ipynb`). Saves `rss_feeds_*.csv`, `reddit_forex_*.csv`, combined `all_scraped_news_*.csv` and matching JSON.
+- **oil_loader.py** — yfinance (no auth). Loads WTI (`CL=F`) + Brent (`BZ=F`) Daily into `data/raw/oil/yahoo/`. Mirrors `yahoo_loader.py`.
+
+### Helper Scripts (`scripts/`)
+Idempotente Reprozessierungs-Scripts, die die Kernlogik relevanter Notebooks 1:1 spiegeln und somit einen Jupyter-Kernel nicht voraussetzen:
+
+- **regenerate_forex_combined.py** — Lädt Yahoo, EODHD und MetaTrader-Daily, produziert `data/processed/forex/forex_alle_quellen_kombiniert.csv` (langformat mit `pair`, `n_sources`, `has_gap`). Spiegelt `datenanalyse_forex.ipynb`.
+- **regenerate_webscraping_sentiment.py** — Kombiniert alle `all_scraped_news_*.csv` (ohne `PRE-FIX`), dedupliziert auf `link`, berechnet TextBlob-Polarity auf Titel+Summary, aggregiert auf Tagesmedian. Produziert `data/processed/news/webscraping_articles_sentiment.csv` (Artikel-Level) + `webscraping_sentiment_daily.csv` (Tagesebene). Spiegelt `notebooks/datenverarbeitung/poc_webscraping_sentiment.ipynb` (Sections 1–4 + 7).
 
 ### Scaffolded but empty modules
 `src/data_cleaning/`, `src/data_transformation/`, `src/pipeline/` — only contain `__init__.py`.
@@ -63,11 +70,15 @@ Organized into subdirectories:
   - `datenanalyse_oil.ipynb` — WTI/Brent EDA
   - `news_forex_korrelation.ipynb` — News-vs-Forex correlation, loads raw Yahoo + EODHD per pair
   - `news_forex_korrelation_kombiniert.ipynb` — Same analysis but builds its own combined CSV (`forex_kombiniert_v2.csv`) from raw, then writes a single processed long-format CSV (`forex_verarbeitet_v2.csv`). Includes oil overlay (Schritt 4b) and a sentiment-diagnose section (Schritt 3b)
+  - `sentiment_analyse_vergleich.ipynb` — Compares EODHD's pre-computed `polarity` against a TextBlob sentiment computed locally on the article text, per pair. Mirrors the dashboard's `Sentiment-Vergleich` page.
+  - `poc_webscraping_sentiment.ipynb` — **Proof of Concept**: Nimmt alle `all_scraped_news_*.csv` (ohne PRE-FIX), dedupliziert auf `link`, berechnet TextBlob-Polarity auf Titel+Summary, aggregiert Tagesmedian, vergleicht mit Yahoo+EODHD-Forex (Überlapp ab Sep 2024). Schreibt die processed-Outputs in `data/processed/news/`. Kernlogik parallel als `scripts/regenerate_webscraping_sentiment.py` verfügbar.
+
+Note: `notebooks/04_eda_news_webscraping_fenlin.ipynb` is an extra variant sitting at the top level of `notebooks/` (not in a subfolder).
 
 German markdown documentation, English code. Use `seaborn-v0_8` plot style.
 
 ### Dashboard (`dashboard.py`)
-Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quellenvergleich`, `Lückenanalyse`, `Preisabweichungen`, `Ölpreise`, `Nachrichten`, `Eigene Grafik`, `Master Grafik`). The `Master Grafik` page lets the user freely combine pairs, sources, oil tickers, and EODHD sentiment with aggregation (D/W/M/Q), aggregation function, optional interpolation, normalization, and a tag filter. Loads `data/processed/forex/forex_alle_quellen_kombiniert.csv`.
+Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quellenvergleich`, `Lückenanalyse`, `Preisabweichungen`, `Ölpreise`, `Nachrichten`, `Sentiment-Vergleich`, `Eigene Grafik`, `Master Grafik`, `Master Grafik 2`). The `Sentiment-Vergleich` page runs TextBlob over the EODHD article text and plots it against the pre-computed EODHD `polarity` (cached via `@st.cache_data`). The `Master Grafik` page (="sauberer Weg") lets the user freely combine pairs, sources, oil tickers, and EODHD sentiment with aggregation (D/W/M/Q), aggregation function, optional interpolation, normalization, and a tag filter. Loads `data/processed/forex/forex_alle_quellen_kombiniert.csv`. The `Master Grafik 2` page (="Proof of Concept") mirrors the Master Grafik UI but uses **Webscraping-News + own TextBlob sentiment** instead of EODHD. Forex/Oel are identical (Yahoo + EODHD combined). Sentiment is read from `data/processed/news/webscraping_sentiment_daily.csv` (produced by `scripts/regenerate_webscraping_sentiment.py` or the PoC notebook); the source-filter re-aggregates on-the-fly from `webscraping_articles_sentiment.csv`.
 
 ### News-Sentiment handling
 - EODHD news per pair is filtered defensively by the canonical FX symbol (`EURUSD.FOREX`, `EURCHF.FOREX`, `GBPUSD.FOREX`) via the `symbols` column — both in the notebook and the dashboard.
@@ -76,7 +87,7 @@ Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quel
 - **EUR_CHF news coverage from EODHD is essentially absent** (~12 articles total) — sentiment for that pair is not meaningful.
 
 ### Data Layout
-All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb`, **not** by a loader script — must be regenerated when raw data changes) and the `_v2` outputs from `news_forex_korrelation_kombiniert.ipynb`. Additionally, oil prices live under `data/raw/oil/yahoo/`.
+All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb`, **not** by a loader script — must be regenerated when raw data changes) and the `_v2` outputs (`forex_kombiniert_v2.csv`, `forex_verarbeitet_v2.csv`) from `news_forex_korrelation_kombiniert.ipynb`. `data/processed/news/` is scaffolded but currently empty — the planned refactoring target for processed news CSVs. Oil prices live under `data/raw/oil/yahoo/`.
 
 Within `raw/`:
 - `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
