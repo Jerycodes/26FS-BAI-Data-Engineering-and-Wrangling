@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"c:/Users/Startklar/OneDrive - FHNW/Fächer/4. Semester/Data Wrangling & Engineering/26FS-BAI-Data-Engineering-and-Wrangling\" -type f)"
+    ]
+  }
+}
