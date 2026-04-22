@@ -8,10 +8,12 @@ Academic Data Engineering & Wrangling project (FHNW, course 26FS BAI). Analyzes 
 
 ## Environment Setup
 
-- Python 3.12.6 with virtual environment in `.venv/`
+- Python 3.12 (pinned via `.python-version`) with virtual environment in `.venv/`
 - Activate: `source .venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
-- Copy `.env.example` to `.env` and add EODHD API key
+- Key dependencies: `pandas`, `yfinance`, `requests`, `feedparser`, `beautifulsoup4`, `textblob`, `plotly`, `seaborn`, `streamlit>=1.45.0`
+- Copy `.env.example` to `.env` and add EODHD API key (also has MetaTrader 5 login fields)
+- Streamlit theme config in `.streamlit/config.toml` (dark theme, headless)
 - No test framework, linter, or build system is configured
 
 ## Running Code
@@ -27,6 +29,11 @@ python src/data_loading/webscraping_loader.py
 Launch notebooks:
 ```bash
 jupyter notebook notebooks/
+```
+
+Launch the Streamlit dashboard:
+```bash
+streamlit run dashboard.py
 ```
 
 ## Architecture
@@ -48,12 +55,34 @@ Each loader is a standalone script (functional style, no classes) with module-le
 `src/data_cleaning/`, `src/data_transformation/`, `src/pipeline/` — only contain `__init__.py`.
 
 ### Notebooks (`notebooks/`)
-Numbered EDA notebooks (01–04), one per data source. German markdown documentation, English code. Use `seaborn-v0_8` plot style.
+Organized into subdirectories:
+- `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–05), one per data source (05 = oil/Yahoo)
+- `notebooks/datenverarbeitung/` — Data processing/analysis notebooks:
+  - `Test_datenanalyse.ipynb` — webscraping news wrangling + MetaTrader EDA + cross-source comparison
+  - `datenanalyse_forex.ipynb` — produces `data/processed/forex/forex_alle_quellen_kombiniert.csv` (long-format Yahoo/EODHD/MetaTrader merge with `pair`, `n_sources`, `has_gap`). Used by the dashboard.
+  - `datenanalyse_oil.ipynb` — WTI/Brent EDA
+  - `news_forex_korrelation.ipynb` — News-vs-Forex correlation, loads raw Yahoo + EODHD per pair
+  - `news_forex_korrelation_kombiniert.ipynb` — Same analysis but builds its own combined CSV (`forex_kombiniert_v2.csv`) from raw, then writes a single processed long-format CSV (`forex_verarbeitet_v2.csv`). Includes oil overlay (Schritt 4b) and a sentiment-diagnose section (Schritt 3b)
+
+German markdown documentation, English code. Use `seaborn-v0_8` plot style.
+
+### Dashboard (`dashboard.py`)
+Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quellenvergleich`, `Lückenanalyse`, `Preisabweichungen`, `Ölpreise`, `Nachrichten`, `Eigene Grafik`, `Master Grafik`). The `Master Grafik` page lets the user freely combine pairs, sources, oil tickers, and EODHD sentiment with aggregation (D/W/M/Q), aggregation function, optional interpolation, normalization, and a tag filter. Loads `data/processed/forex/forex_alle_quellen_kombiniert.csv`.
+
+### News-Sentiment handling
+- EODHD news per pair is filtered defensively by the canonical FX symbol (`EURUSD.FOREX`, `EURCHF.FOREX`, `GBPUSD.FOREX`) via the `symbols` column — both in the notebook and the dashboard.
+- Daily aggregation uses **median** (not mean) of `polarity` in both the notebook (`load_news` in `news_forex_korrelation_kombiniert.ipynb`) and the dashboard's Master Grafik — more robust to outliers.
+- Missing days (≈8–10% for EUR_USD/GBP_USD, mostly weekends/holidays) are **kept as NaN** — sentiment is not interpolated. Weekly/monthly resampling handles them automatically.
+- **EUR_CHF news coverage from EODHD is essentially absent** (~12 articles total) — sentiment for that pair is not meaningful.
 
 ### Data Layout
-- `data/raw/forex/yahoo/` and `data/raw/forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
-- `data/raw/news/eodhd/` — JSON + CSV per currency pair
-- `data/raw/news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
+All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb`, **not** by a loader script — must be regenerated when raw data changes) and the `_v2` outputs from `news_forex_korrelation_kombiniert.ipynb`. Additionally, oil prices live under `data/raw/oil/yahoo/`.
+
+Within `raw/`:
+- `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
+- `forex/metatrader/` — MetaTrader 5 exports: tab-separated CSVs with `<DATE>`, `<OPEN>`, etc. headers. Currently EURUSD Daily and M15 (15-minute) data.
+- `news/eodhd/` — JSON + CSV per currency pair
+- `news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
 
 ## Conventions
 

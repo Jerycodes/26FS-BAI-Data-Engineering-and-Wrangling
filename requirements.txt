@@ -6,6 +6,7 @@ python-dotenv
 # Datenverarbeitung
 pandas
 numpy
+scipy
 
 # Sentiment Analyse
 textblob
@@ -23,3 +24,6 @@ notebook
 beautifulsoup4
 feedparser
 lxml
+
+# Dashboard
+streamlit>=1.45.0
