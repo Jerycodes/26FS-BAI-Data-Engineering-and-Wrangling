@@ -191,6 +191,7 @@ page = st.sidebar.radio("Navigation", [
     "Eigene Grafik",
     "Master Grafik",
     "Master Grafik 2",
+    "Workflow",
 ])
 
 # ---------------------------------------------------------------------------
@@ -959,7 +960,8 @@ elif page == "Master Grafik":
     fill_gaps = st.sidebar.checkbox(
         "Fehlende Tage interpolieren (linear, vor Aggregation)",
         value=False,
-        help="Wochenenden/Feiertage werden zeitgewichtet linear gefüllt – nur sinnvoll bei täglicher Auflösung.",
+        help="Wirkt nur auf Forex- und Öl-Reihen. News-Sentiment wird NICHT interpoliert ("
+             "kein Artikel ≠ neutrale Nachricht). Nur sinnvoll bei täglicher Auflösung.",
     )
     normalize = st.sidebar.checkbox(
         "Normalisieren (Index = 100 am Startdatum)",
@@ -1064,10 +1066,15 @@ elif page == "Master Grafik":
         st.warning("Keine Daten im gewählten Zeitraum.")
         st.stop()
 
-    # Optional interpolieren (vor Aggregation)
+    # Optional interpolieren (vor Aggregation) — ABER nur Forex/Oel; Sentiment bleibt NaN,
+    # weil "kein Artikel" != "neutraler Artikel" ist. Interpolation auf Sentiment waere
+    # methodisch falsch.
     if fill_gaps:
         full_idx = pd.date_range(df_master.index.min(), df_master.index.max(), freq="D")
-        df_master = df_master.reindex(full_idx).interpolate(method="time")
+        df_master = df_master.reindex(full_idx)
+        non_sent_cols = [c for c in df_master.columns if series_category.get(c) != "sentiment"]
+        if non_sent_cols:
+            df_master[non_sent_cols] = df_master[non_sent_cols].interpolate(method="time")
         df_master.index.name = "date"
 
     # Aggregation
@@ -1275,6 +1282,8 @@ elif page == "Master Grafik 2":
     fill_gaps2 = st.sidebar.checkbox(
         "Fehlende Tage interpolieren (linear, vor Aggregation)",
         value=False,
+        help="Wirkt nur auf Forex- und Öl-Reihen. News-Sentiment wird NICHT interpoliert ("
+             "kein Artikel ≠ neutrale Nachricht).",
         key="mg2_fill",
     )
     normalize2 = st.sidebar.checkbox(
@@ -1378,8 +1387,12 @@ elif page == "Master Grafik 2":
             st.caption(f"Gemeinsame Tage Forex ↔ Sentiment: **{len(overlap)}**")
 
     if fill_gaps2:
+        # Nur Forex/Oel interpolieren; Sentiment bleibt NaN (kein Artikel != neutral).
         full_idx = pd.date_range(df_master2.index.min(), df_master2.index.max(), freq="D")
-        df_master2 = df_master2.reindex(full_idx).interpolate(method="time")
+        df_master2 = df_master2.reindex(full_idx)
+        non_sent_cols2 = [c for c in df_master2.columns if series_category2.get(c) != "sentiment"]
+        if non_sent_cols2:
+            df_master2[non_sent_cols2] = df_master2[non_sent_cols2].interpolate(method="time")
         df_master2.index.name = "date"
 
     if freq2 != "D":
@@ -1476,3 +1489,137 @@ elif page == "Master Grafik 2":
             mime="text/csv",
             key="mg2_dl",
         )
+
+# ---------------------------------------------------------------------------
+# Page: Workflow — Pipeline-Diagramm des Projekts
+# ---------------------------------------------------------------------------
+elif page == "Workflow":
+    st.title("Workflow: Pipeline des Projekts")
+    st.caption(
+        "Darstellung der Datenfluesse von Rohdaten-Akquisition ueber Harmonisierung bis zu "
+        "den Analyseergebnissen. Quellen links, verarbeitete Zwischenstufen in der Mitte, "
+        "Sichtbarmachung rechts."
+    )
+
+    workflow_dot = r"""
+    digraph workflow {
+        rankdir=LR;
+        bgcolor="transparent";
+        node [fontname="Helvetica", fontsize=10, style="filled,rounded", shape=box, margin="0.15,0.08"];
+        edge [fontname="Helvetica", fontsize=9, color="#888"];
+
+        // Farben nach Schicht
+        subgraph cluster_sources {
+            label="1. Rohdaten-Quellen";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            yahoo   [label="Yahoo Finance\n(Forex + Oel)",          fillcolor="#E3F2FD"];
+            eodhd   [label="EODHD API\n(Forex + News)",             fillcolor="#E3F2FD"];
+            mt5     [label="MetaTrader 5\n(Daily + M15)",           fillcolor="#E3F2FD"];
+            rss     [label="RSS-Feeds\n(ForexLive, FXStreet, ...)", fillcolor="#E3F2FD"];
+            reddit  [label="Reddit\n(r/Forex, r/investing, ...)",   fillcolor="#E3F2FD"];
+        }
+
+        subgraph cluster_loaders {
+            label="2. Loader (Dedup + Harmonisierung)";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            yahoo_l   [label="yahoo_loader.py",          fillcolor="#FFF9C4"];
+            eodhd_l   [label="eodhd_loader.py",          fillcolor="#FFF9C4"];
+            news_l    [label="eodhd_news_loader.py",     fillcolor="#FFF9C4"];
+            web_l     [label="webscraping_loader.py\n(requests + feedparser)", fillcolor="#FFF9C4"];
+            oil_l     [label="oil_loader.py",            fillcolor="#FFF9C4"];
+        }
+
+        subgraph cluster_raw {
+            label="3. data/raw/";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            raw_fx    [label="forex/{yahoo,eodhd,metatrader}", fillcolor="#FFE0B2"];
+            raw_news  [label="news/{eodhd,webscraping}",       fillcolor="#FFE0B2"];
+            raw_oil   [label="oil/yahoo",                      fillcolor="#FFE0B2"];
+        }
+
+        subgraph cluster_processed {
+            label="4. Processing (Notebooks + Scripts)";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            fx_combine  [label="regenerate_forex_combined.py\n(Kombination Yahoo+EODHD+MT5,\nLuecken-Flag)", fillcolor="#C8E6C9"];
+            news_sent   [label="regenerate_webscraping_sentiment.py\n(Dedup auf link,\nTextBlob-Polarity,\nTages-Median)", fillcolor="#C8E6C9"];
+            eodhd_sent  [label="sentiment_analyse_vergleich.ipynb\n(TextBlob auf EODHD-Text\n vs. EODHD-Polarity)",          fillcolor="#C8E6C9"];
+        }
+
+        subgraph cluster_processed_data {
+            label="5. data/processed/";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            fx_combined   [label="forex_alle_quellen\n_kombiniert.csv",        fillcolor="#FFE0B2"];
+            ws_daily      [label="webscraping_sentiment\n_daily.csv",          fillcolor="#FFE0B2"];
+            ws_articles   [label="webscraping_articles\n_sentiment.csv",       fillcolor="#FFE0B2"];
+        }
+
+        subgraph cluster_dashboard {
+            label="6. Streamlit-Dashboard (dashboard.py)";
+            fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+            mg1  [label="Master Grafik 1\n(sauberer Weg:\nEODHD-Sentiment)",                fillcolor="#BBDEFB"];
+            mg2  [label="Master Grafik 2\n(Proof of Concept:\nWebscraping + TextBlob)",      fillcolor="#BBDEFB"];
+            svg  [label="Sentiment-Vergleich\n(EODHD vs. TextBlob)",                         fillcolor="#BBDEFB"];
+            other [label="Uebersicht, Quellenvergleich,\nLueckenanalyse, Preisabweichungen,\nOelpreise, Nachrichten", fillcolor="#BBDEFB"];
+        }
+
+        // Kanten: Rohdatenquelle -> Loader
+        yahoo  -> yahoo_l;
+        eodhd  -> eodhd_l;
+        eodhd  -> news_l;
+        mt5    -> raw_fx    [label="manueller Export"];
+        rss    -> web_l;
+        reddit -> web_l;
+        yahoo  -> oil_l;
+
+        // Loader -> Raw-Storage
+        yahoo_l -> raw_fx;
+        eodhd_l -> raw_fx;
+        news_l  -> raw_news;
+        web_l   -> raw_news;
+        oil_l   -> raw_oil;
+
+        // Raw -> Processing
+        raw_fx   -> fx_combine;
+        raw_news -> news_sent;
+        raw_news -> eodhd_sent;
+
+        // Processing -> Processed Storage
+        fx_combine -> fx_combined;
+        news_sent  -> ws_daily;
+        news_sent  -> ws_articles;
+
+        // Processed -> Dashboard
+        fx_combined -> mg1;
+        fx_combined -> mg2;
+        fx_combined -> other;
+        raw_news    -> mg1      [label="EODHD-Polarity\n(aus raw)"];
+        ws_daily    -> mg2;
+        ws_articles -> mg2      [label="Source-Filter"];
+        raw_news    -> svg;
+        raw_oil     -> mg1;
+        raw_oil     -> mg2;
+        raw_oil     -> other;
+
+        // Doku rechts unten
+        doc [label="DOKUMENTATION.md / .docx\n(Projekt-Protokoll)", shape=note, fillcolor="#F5F5F5"];
+        fx_combined -> doc [style=dashed, color="#BBB"];
+        ws_daily    -> doc [style=dashed, color="#BBB"];
+    }
+    """
+
+    st.graphviz_chart(workflow_dot, use_container_width=True)
+
+    st.subheader("Erlaeuterung zur Pipeline")
+    st.markdown(
+        """
+- **Schicht 1 (Rohdatenquellen)** — externe APIs und manuelle Exporte. Nie veraendert.
+- **Schicht 2 (Loader)** — Python-Scripts in `src/data_loading/`. Saeubern (Zeitzonen, Spaltennamen), deduplizieren, schreiben Rohdaten als CSV/JSON in `data/raw/`.
+- **Schicht 3 (Rohdaten-Storage)** — nach Quelle strukturierte Ordner mit Stand-Datum im Dateinamen, damit reproduzierbar.
+- **Schicht 4 (Processing)** — idempotente Reprozessierung: Forex-Kombination, Deduplikation der Webscraping-News auf `link`, TextBlob-Sentiment, Tages-Median. Parallel als Notebook (ausfuehrbare Doku) und Script (reproduzierbar ohne Jupyter).
+- **Schicht 5 (Processed-Storage)** — harmonisierte, vergleichbare Datentabellen in `data/processed/`.
+- **Schicht 6 (Dashboard)** — interaktive Visualisierung. `Master Grafik 1` = sauberer Weg mit EODHD-Sentiment; `Master Grafik 2` = Proof of Concept mit eigener TextBlob-Analyse auf Webscraping-Texten. Beide nutzen **dieselben** Forex- und Oel-Daten.
+- **Doku** (`DOKUMENTATION.md` + `.docx`) beschreibt Entscheidungen, Methoden und Grenzen; ausfuehrbare Pipeline-Teile werden im Protokoll-Abschnitt referenziert.
+
+Der zentrale Architekturentscheid: **Kein Schritt ist destruktiv.** Jede Ebene kann aus der darunter liegenden neu erzeugt werden. So bleibt die Pipeline nachvollziehbar und reproduzierbar.
+        """
+    )

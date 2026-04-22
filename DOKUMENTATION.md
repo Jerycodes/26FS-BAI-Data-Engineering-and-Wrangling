@@ -74,12 +74,13 @@ Der Umgang wurde für jeden Datentyp separat entschieden. Generelles Prinzip: **
 - **Samstage:** Fehlen bei allen Quellen, weil der Forex-Markt weltweit geschlossen ist. → nicht ausgefüllt, ist erwartet.
 - **Sonntage:** EODHD liefert Werte (Markteröffnung Asien ab Sonntagabend UTC), Yahoo und MT5 nicht. → Sonntagsdaten werden **behalten**, wo vorhanden. Sie gehen als normaler Tag in Zeitreihen ein, weil sie reale Marktdaten sind.
 - **Feiertage (z.B. 1. Januar, Karfreitag):** In Yahoo fehlend, in EODHD teilweise vorhanden. → **nicht interpoliert**, weil das den Markt zu diesem Zeitpunkt nicht repräsentiert. In der kombinierten Tabelle wird per `has_gap`-Flag markiert, dass eine Quelle fehlt.
-- **Interpolation als Dashboard-Option:** Im Dashboard gibt es einen Schalter „Fehlende Tage interpolieren (linear, vor Aggregation)". Dieser wirkt **nur auf Anzeige**, schreibt keine Werte zurück. So bleibt die Rohdaten-Integrität gewahrt und der User sieht, wo der Effekt auftritt.
+- **Interpolation als Dashboard-Option:** Im Dashboard gibt es einen Schalter „Fehlende Tage interpolieren (linear, vor Aggregation)". Dieser wirkt **ausschließlich auf Forex- und Öl-Reihen**, niemals auf Sentiment. Außerdem wirkt er nur auf die Anzeige, schreibt keine Werte zurück. So bleibt die Rohdaten-Integrität gewahrt und der User sieht, wo der Effekt auftritt.
 
 ### 4.2 News-Sentiment: Tage ohne Artikel
 
 - Wenn an einem Tag **kein Artikel** in EODHD oder im Webscraping-Pool vorliegt (typisch: Wochenenden, Feiertage, thin-news-Tage), bleibt die Sentiment-Zeitreihe **NaN**.
-- Imputation wäre irreführend, weil es **keine Nachricht ≠ neutrale Nachricht** ist. Eine Null-Imputation würde falschen Einfluss auf das Tagesmittel haben.
+- **Kein Interpolieren — nirgends.** Weder im Rohdatenlayer noch im Processing, noch im Dashboard. Selbst wenn der User im Dashboard die Interpolations-Checkbox aktiviert, werden Sentiment-Reihen explizit ausgenommen.
+- Begründung: Imputation wäre irreführend, weil es **keine Nachricht ≠ neutrale Nachricht** ist. Eine Null-Imputation oder Zeit-Interpolation würde falschen Einfluss auf das Tagesmittel haben und eine nicht vorhandene Nachrichtenlage vortäuschen.
 - Bei der Aggregation auf Wochen/Monate ignoriert pandas NaN automatisch (`skipna=True`), d.h. Wochen mit 2 statt 5 News-Tagen werden immer noch aggregierbar, nur eben auf Basis der vorhandenen Tage.
 
 ### 4.3 Öl-Daten
@@ -246,6 +247,7 @@ Streamlit-App (`dashboard.py`). Aktuelle Seiten:
 | **Eigene Grafik** | Freie Ad-hoc-Visualisierung über die kombinierten Forex-Daten |
 | **Master Grafik** | Sauberer Weg (Abschnitt 9) |
 | **Master Grafik 2** | Proof of Concept (Abschnitt 10) |
+| **Workflow** | Pipeline-Diagramm des Projekts (Rohdaten → Processing → Dashboard) als Graphviz-Visualisierung inkl. Erläuterung der Schichten |
 
 Caching über `@st.cache_data`, damit wiederholte Navigation flüssig bleibt.
 
@@ -341,11 +343,12 @@ datawrangling/
 | 22.04. | Proof-of-Concept-Notebook `poc_webscraping_sentiment.ipynb` + paralleles Script — zeigt, dass der saubere Weg mit einer unabhängigen Nachrichtenquelle reproduzierbar ist. |
 | 22.04. | Dashboard „Master Grafik 2" von MT5+Webscraping auf Yahoo+EODHD+Webscraping umgebaut — die beiden Master-Grafiken zeigen jetzt „sauberer Weg" und „Proof of Concept" im direkten Vergleich. |
 | 22.04. | Altdaten (Dateien mit `_to_2026-03-25`) in `data_archive/` verschoben. Ordner via `.gitignore` aus dem Repo gehalten, bleibt lokal verfügbar. |
+| 22.04. | Präzisierung: die Interpolations-Option in Master Grafik 1 und 2 überspringt Sentiment-Reihen. Begründung siehe 4.2. |
+| 22.04. | Neue Dashboard-Seite „Workflow" mit Graphviz-Diagramm der Pipeline (Rohdaten → Loader → Raw-Storage → Processing → Processed-Storage → Dashboard). |
 
 ---
 
 ## 16. Offen / ToDo
 
-- **Workflow-Grafik** im Streamlit visualisieren (eigene Seite, die diese Pipeline als Diagramm zeigt).
 - Optional: `news_forex_korrelation_kombiniert.ipynb` mit aktualisierten Daten neu durchlaufen, um die `_v2`-CSVs zu regenerieren (Dashboard ist nicht davon abhängig).
 - Optional: Fenlins parallele Arbeit (`05_merge_und_korrelation.ipynb`, `data/final/forex_news_merged.csv`) mit dem PoC-Pfad abgleichen und ggf. konsolidieren.
