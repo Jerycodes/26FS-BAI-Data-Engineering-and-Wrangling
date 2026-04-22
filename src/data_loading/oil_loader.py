@@ -1,7 +1,7 @@
 """
-oil_loader.py - Oelpreis-Daten (WTI, Brent) von Yahoo Finance laden und als CSV speichern.
+oil_loader.py - Ölpreis-Daten (WTI, Brent) von Yahoo Finance laden und als CSV speichern.
 
-Laedt taegliche Ölpreis-Futures (USD/Barrel) und speichert sie als CSV in
+Lädt tägliche Ölpreis-Futures (USD/Barrel) und speichert sie als CSV in
 `data/raw/oil/yahoo/`. Analog zu `yahoo_loader.py`.
 
 Verwendung:
@@ -14,12 +14,12 @@ import os
 
 
 def load_oil_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-    """Laedt Oelpreis-Daten von Yahoo Finance (z.B. CL=F = WTI, BZ=F = Brent)."""
+    """Lädt Ölpreis-Daten von Yahoo Finance (z.B. CL=F = WTI, BZ=F = Brent)."""
     print(f"Lade {symbol} von {start_date} bis {end_date}...")
     ticker = yf.Ticker(symbol)
     df = ticker.history(start=start_date, end=end_date)
     if df.empty:
-        print(f"WARNUNG: Keine Daten fuer {symbol}!")
+        print(f"WARNUNG: Keine Daten für {symbol}!")
     else:
         print(f"Erfolgreich {len(df)} Zeilen geladen.")
     return df
@@ -54,4 +54,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"FEHLER bei {yahoo_symbol}: {e}\n")
 
-    print("Fertig! Oelpreis-Daten geladen.")
+    print("Fertig! Ölpreis-Daten geladen.")

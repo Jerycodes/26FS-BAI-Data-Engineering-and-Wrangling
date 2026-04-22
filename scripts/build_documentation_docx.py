@@ -1,8 +1,8 @@
 """
 build_documentation_docx.py - Erzeugt DOKUMENTATION.docx aus DOKUMENTATION.md.
 
-Konvertiert das Markdown-Dokument in ein Word-File fuer die Abgabe. Ueberschriften,
-Listen, Tabellen und Code-Bloecke werden in native Word-Elemente umgewandelt.
+Konvertiert das Markdown-Dokument in ein Word-File für die Abgabe. Überschriften,
+Listen, Tabellen und Code-Blöcke werden in native Word-Elemente umgewandelt.
 
 Verwendung:
     python scripts/build_documentation_docx.py

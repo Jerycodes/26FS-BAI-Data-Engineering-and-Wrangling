@@ -24,7 +24,7 @@ def load_yahoo(pair: str) -> pd.DataFrame:
     pattern = os.path.join(DATA_DIR, "yahoo", f"{pair}_*.csv")
     files = sorted(glob.glob(pattern))
     if not files:
-        raise FileNotFoundError(f"Keine Yahoo-Datei fuer {pair} unter {pattern}")
+        raise FileNotFoundError(f"Keine Yahoo-Datei für {pair} unter {pattern}")
     df = pd.read_csv(files[-1], index_col=0, parse_dates=True)
     df.index = pd.to_datetime(df.index, utc=True).tz_localize(None).ceil("D")
     df.index.name = "date"
@@ -37,7 +37,7 @@ def load_eodhd(pair: str) -> pd.DataFrame:
     pattern = os.path.join(DATA_DIR, "eodhd", f"{pair}_*.csv")
     files = sorted(glob.glob(pattern))
     if not files:
-        raise FileNotFoundError(f"Keine EODHD-Datei fuer {pair} unter {pattern}")
+        raise FileNotFoundError(f"Keine EODHD-Datei für {pair} unter {pattern}")
     df = pd.read_csv(files[-1], index_col=0, parse_dates=True)
     df.index = pd.to_datetime(df.index).normalize()
     df.index.name = "date"
@@ -90,7 +90,7 @@ def main() -> None:
 
         all_dfs.append(pair_df)
         gaps = pair_df["has_gap"].sum()
-        print(f"  {pair}: {len(pair_df)} Zeilen, {gaps} Tage mit Luecken")
+        print(f"  {pair}: {len(pair_df)} Zeilen, {gaps} Tage mit Lücken")
 
     df_combined = pd.concat(all_dfs).sort_values(["pair", "date"])
     os.makedirs(PROCESSED_DIR, exist_ok=True)

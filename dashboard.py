@@ -1066,7 +1066,7 @@ elif page == "Master Grafik":
         st.warning("Keine Daten im gewählten Zeitraum.")
         st.stop()
 
-    # Optional interpolieren (vor Aggregation) — ABER nur Forex/Oel; Sentiment bleibt NaN,
+    # Optional interpolieren (vor Aggregation) — ABER nur Forex/Öl; Sentiment bleibt NaN,
     # weil "kein Artikel" != "neutraler Artikel" ist. Interpolation auf Sentiment waere
     # methodisch falsch.
     if fill_gaps:
@@ -1195,7 +1195,7 @@ elif page == "Master Grafik 2":
     st.title("Master Grafik 2 — Proof of Concept")
     st.caption(
         "Gleiche Methodik wie Master Grafik 1, aber mit **Webscraping-News** (RSS + Reddit) "
-        "und **eigener TextBlob-Sentiment-Analyse** statt EODHD. Forex/Oel bleiben identisch "
+        "und **eigener TextBlob-Sentiment-Analyse** statt EODHD. Forex/Öl bleiben identisch "
         "(Yahoo + EODHD kombiniert). Dient dem Vergleich, ob der Zusammenhang in Master Grafik 1 "
         "mit einer unabhaengigen Nachrichtenquelle reproduzierbar ist."
     )
@@ -1380,14 +1380,14 @@ elif page == "Master Grafik 2":
         overlap = df_master2[fx_cols + sn_cols].dropna(how="any")
         if overlap.empty:
             st.info(
-                "Forex und Webscraping-Sentiment haben im gewaehlten Zeitraum keine gemeinsamen Tage — "
-                "Korrelation ist nicht berechenbar. Zeitraum anpassen oder Woche/Monat als Aggregation waehlen."
+                "Forex und Webscraping-Sentiment haben im gewählten Zeitraum keine gemeinsamen Tage — "
+                "Korrelation ist nicht berechenbar. Zeitraum anpassen oder Woche/Monat als Aggregation wählen."
             )
         else:
             st.caption(f"Gemeinsame Tage Forex ↔ Sentiment: **{len(overlap)}**")
 
     if fill_gaps2:
-        # Nur Forex/Oel interpolieren; Sentiment bleibt NaN (kein Artikel != neutral).
+        # Nur Forex/Öl interpolieren; Sentiment bleibt NaN (kein Artikel != neutral).
         full_idx = pd.date_range(df_master2.index.min(), df_master2.index.max(), freq="D")
         df_master2 = df_master2.reindex(full_idx)
         non_sent_cols2 = [c for c in df_master2.columns if series_category2.get(c) != "sentiment"]
@@ -1496,7 +1496,7 @@ elif page == "Master Grafik 2":
 elif page == "Workflow":
     st.title("Workflow: Pipeline des Projekts")
     st.caption(
-        "Darstellung der Datenfluesse von Rohdaten-Akquisition ueber Harmonisierung bis zu "
+        "Darstellung der Datenflüsse von Rohdaten-Akquisition über Harmonisierung bis zu "
         "den Analyseergebnissen. Quellen links, verarbeitete Zwischenstufen in der Mitte, "
         "Sichtbarmachung rechts."
     )
@@ -1512,7 +1512,7 @@ elif page == "Workflow":
         subgraph cluster_sources {
             label="1. Rohdaten-Quellen";
             fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
-            yahoo   [label="Yahoo Finance\n(Forex + Oel)",          fillcolor="#E3F2FD"];
+            yahoo   [label="Yahoo Finance\n(Forex + Öl)",          fillcolor="#E3F2FD"];
             eodhd   [label="EODHD API\n(Forex + News)",             fillcolor="#E3F2FD"];
             mt5     [label="MetaTrader 5\n(Daily + M15)",           fillcolor="#E3F2FD"];
             rss     [label="RSS-Feeds\n(ForexLive, FXStreet, ...)", fillcolor="#E3F2FD"];
@@ -1540,7 +1540,7 @@ elif page == "Workflow":
         subgraph cluster_processed {
             label="4. Processing (Notebooks + Scripts)";
             fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
-            fx_combine  [label="regenerate_forex_combined.py\n(Kombination Yahoo+EODHD+MT5,\nLuecken-Flag)", fillcolor="#C8E6C9"];
+            fx_combine  [label="regenerate_forex_combined.py\n(Kombination Yahoo+EODHD+MT5,\nLücken-Flag)", fillcolor="#C8E6C9"];
             news_sent   [label="regenerate_webscraping_sentiment.py\n(Dedup auf link,\nTextBlob-Polarity,\nTages-Median)", fillcolor="#C8E6C9"];
             eodhd_sent  [label="sentiment_analyse_vergleich.ipynb\n(TextBlob auf EODHD-Text\n vs. EODHD-Polarity)",          fillcolor="#C8E6C9"];
         }
@@ -1559,7 +1559,7 @@ elif page == "Workflow":
             mg1  [label="Master Grafik 1\n(sauberer Weg:\nEODHD-Sentiment)",                fillcolor="#BBDEFB"];
             mg2  [label="Master Grafik 2\n(Proof of Concept:\nWebscraping + TextBlob)",      fillcolor="#BBDEFB"];
             svg  [label="Sentiment-Vergleich\n(EODHD vs. TextBlob)",                         fillcolor="#BBDEFB"];
-            other [label="Uebersicht, Quellenvergleich,\nLueckenanalyse, Preisabweichungen,\nOelpreise, Nachrichten", fillcolor="#BBDEFB"];
+            other [label="Übersicht, Quellenvergleich,\nLückenanalyse, Preisabweichungen,\nÖlpreise, Nachrichten", fillcolor="#BBDEFB"];
         }
 
         // Kanten: Rohdatenquelle -> Loader
@@ -1609,16 +1609,16 @@ elif page == "Workflow":
 
     st.graphviz_chart(workflow_dot, use_container_width=True)
 
-    st.subheader("Erlaeuterung zur Pipeline")
+    st.subheader("Erläuterung zur Pipeline")
     st.markdown(
         """
-- **Schicht 1 (Rohdatenquellen)** — externe APIs und manuelle Exporte. Nie veraendert.
-- **Schicht 2 (Loader)** — Python-Scripts in `src/data_loading/`. Saeubern (Zeitzonen, Spaltennamen), deduplizieren, schreiben Rohdaten als CSV/JSON in `data/raw/`.
+- **Schicht 1 (Rohdatenquellen)** — externe APIs und manuelle Exporte. Nie verändert.
+- **Schicht 2 (Loader)** — Python-Scripts in `src/data_loading/`. Säubern (Zeitzonen, Spaltennamen), deduplizieren, schreiben Rohdaten als CSV/JSON in `data/raw/`.
 - **Schicht 3 (Rohdaten-Storage)** — nach Quelle strukturierte Ordner mit Stand-Datum im Dateinamen, damit reproduzierbar.
-- **Schicht 4 (Processing)** — idempotente Reprozessierung: Forex-Kombination, Deduplikation der Webscraping-News auf `link`, TextBlob-Sentiment, Tages-Median. Parallel als Notebook (ausfuehrbare Doku) und Script (reproduzierbar ohne Jupyter).
+- **Schicht 4 (Processing)** — idempotente Reprozessierung: Forex-Kombination, Deduplikation der Webscraping-News auf `link`, TextBlob-Sentiment, Tages-Median. Parallel als Notebook (ausführbare Doku) und Script (reproduzierbar ohne Jupyter).
 - **Schicht 5 (Processed-Storage)** — harmonisierte, vergleichbare Datentabellen in `data/processed/`.
-- **Schicht 6 (Dashboard)** — interaktive Visualisierung. `Master Grafik 1` = sauberer Weg mit EODHD-Sentiment; `Master Grafik 2` = Proof of Concept mit eigener TextBlob-Analyse auf Webscraping-Texten. Beide nutzen **dieselben** Forex- und Oel-Daten.
-- **Doku** (`DOKUMENTATION.md` + `.docx`) beschreibt Entscheidungen, Methoden und Grenzen; ausfuehrbare Pipeline-Teile werden im Protokoll-Abschnitt referenziert.
+- **Schicht 6 (Dashboard)** — interaktive Visualisierung. `Master Grafik 1` = sauberer Weg mit EODHD-Sentiment; `Master Grafik 2` = Proof of Concept mit eigener TextBlob-Analyse auf Webscraping-Texten. Beide nutzen **dieselben** Forex- und Öl-Daten.
+- **Doku** (`DOKUMENTATION.md` + `.docx`) beschreibt Entscheidungen, Methoden und Grenzen; ausführbare Pipeline-Teile werden im Protokoll-Abschnitt referenziert.
 
 Der zentrale Architekturentscheid: **Kein Schritt ist destruktiv.** Jede Ebene kann aus der darunter liegenden neu erzeugt werden. So bleibt die Pipeline nachvollziehbar und reproduzierbar.
         """

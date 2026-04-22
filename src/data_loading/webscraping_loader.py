@@ -40,7 +40,7 @@ SUBREDDITS = {
 
 
 def scrape_rss_feed(feed_name: str, feed_url: str) -> list[dict]:
-    """Laedt einen RSS Feed via requests (SSL-Fix) und parst ihn mit feedparser."""
+    """Lädt einen RSS Feed via requests (SSL-Fix) und parst ihn mit feedparser."""
     print(f"Lade RSS: {feed_name}...")
     try:
         response = requests.get(feed_url, headers=HEADERS, timeout=10)
@@ -69,7 +69,7 @@ def scrape_rss_feed(feed_name: str, feed_url: str) -> list[dict]:
 
 
 def scrape_rss_feeds() -> list[dict]:
-    """Laedt alle konfigurierten RSS Feeds."""
+    """Lädt alle konfigurierten RSS Feeds."""
     articles = []
     for name, url in RSS_FEEDS.items():
         articles.extend(scrape_rss_feed(name, url))
@@ -78,7 +78,7 @@ def scrape_rss_feeds() -> list[dict]:
 
 
 def scrape_reddit(subreddit: str, sort: str = 'hot', limit: int = 100) -> list[dict]:
-    """Laedt Posts von einem Subreddit via JSON API."""
+    """Lädt Posts von einem Subreddit via JSON API."""
     print(f"Lade Reddit r/{subreddit} ({sort})...")
     headers = {'User-Agent': 'DataWrangling-FHNW/1.0'}
     url = f'https://www.reddit.com/r/{subreddit}/{sort}.json'
@@ -107,7 +107,7 @@ def scrape_reddit(subreddit: str, sort: str = 'hot', limit: int = 100) -> list[d
 
 
 def clean_text_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    """Entfernt Zeilenumbrueche/uebermaessige Whitespaces in Textspalten."""
+    """Entfernt Zeilenumbrüche/übermäßige Whitespaces in Textspalten."""
     df = df.copy()
     for col in columns:
         if col in df.columns:

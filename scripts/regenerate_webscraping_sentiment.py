@@ -1,5 +1,5 @@
 """
-regenerate_webscraping_sentiment.py - PoC-Pipeline fuer Webscraping-News.
+regenerate_webscraping_sentiment.py - PoC-Pipeline für Webscraping-News.
 
 Spiegelt die Kernlogik aus notebooks/datenverarbeitung/poc_webscraping_sentiment.ipynb
 wider (Abschnitte 1-4 + 7): alle Scrape-Schnappschuesse einlesen, deduplizieren,
@@ -68,7 +68,7 @@ def main() -> None:
     print("Datenqualitaet:")
     print(f"  Leere Titel:        {(df_unique['title'].fillna('').str.strip() == '').sum()}")
     print(f"  Leere Links:        {(df_unique['link'].fillna('').str.strip() == '').sum()}")
-    print(f"  Ungueltiges Datum:  {df_unique['date'].isna().sum()}")
+    print(f"  Ungültiges Datum:   {df_unique['date'].isna().sum()}")
     print(f"  Quellen:            {df_unique['source'].nunique()}")
     print(f"  Zeitraum:           {df_unique['date'].min()} bis {df_unique['date'].max()}\n")
 

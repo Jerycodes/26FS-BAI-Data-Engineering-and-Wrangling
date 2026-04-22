@@ -446,7 +446,7 @@ if __name__ == "__main__":
 
 ---
 
-## NAECHSTE SCHRITTE (nach Refactoring)
+## NÄCHSTE SCHRITTE (nach Refactoring)
 
 | # | Aufgabe | Priorität |
 |---|---------|-----------|
