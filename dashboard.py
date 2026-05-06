@@ -113,8 +113,8 @@ def load_news_eodhd():
         files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "news", "eodhd", f"{pair}_news_*.csv")))
         if files:
             df = pd.read_csv(files[-1])
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            df["date_only"] = df["date"].dt.normalize()
+            df["date"] = pd.to_datetime(df["date"], errors="coerce", utc=True)
+            df["date_only"] = df["date"].dt.tz_convert(None).dt.normalize()
             df["symbols_list"] = df["symbols"].apply(_parse)
             df["tags_list"] = df["tags"].apply(_parse)
             sym = pair_symbol[pair]
