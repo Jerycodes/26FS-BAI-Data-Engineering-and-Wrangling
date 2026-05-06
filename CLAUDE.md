@@ -65,7 +65,7 @@ Idempotente Reprozessierungs-Scripts, die die Kernlogik relevanter Notebooks 1:1
 Organized into subdirectories:
 - `notebooks/rohdaten_laden/` — Numbered EDA notebooks (01–05), one per data source (05 = oil/Yahoo)
 - `notebooks/datenverarbeitung/` — Data processing/analysis notebooks:
-  - `Test_datenanalyse.ipynb` — webscraping news wrangling + MetaTrader EDA + cross-source comparison
+  - `_archiv/Test_datenanalyse.ipynb` — frühe Sammelfläche, Inhalt in Final-Notebooks aufgeteilt (siehe `notebooks/_archiv/README.md`)
   - `datenanalyse_forex.ipynb` — produces `data/processed/forex/forex_alle_quellen_kombiniert.csv` (long-format Yahoo/EODHD/MetaTrader merge with `pair`, `n_sources`, `has_gap`). Used by the dashboard.
   - `datenanalyse_oil.ipynb` — WTI/Brent EDA
   - `news_forex_korrelation.ipynb` — News-vs-Forex correlation, loads raw Yahoo + EODHD per pair

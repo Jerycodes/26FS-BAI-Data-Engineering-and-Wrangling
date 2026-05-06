@@ -20,3 +20,10 @@ venv/
 
 # Archivierte Altdaten (werden durch neuere Pulls abgeloest)
 data_archive/
+
+# Lehrmaterial (Slides) - lokal verwendet, nicht ins Repo (~15MB PDF)
+slides/
+
+# Stray-Stub-Dateien aus frueheren Tests
+hi_jerry
+test_fenlin
