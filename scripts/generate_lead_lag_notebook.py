@@ -467,6 +467,61 @@ except ImportError:
     print("statsmodels nicht installiert — Granger-Test übersprungen.")
 """))
 
+# Resultat-Tabelle ----------------------------------------------------------
+cells.append(md(r"""
+## 6.5 Resultat-Tabelle (für Doku reproduzierbar)
+
+Die folgende Cell extrahiert pro Paar / Weg / Interpolations-Variante die
+Kennzahlen, die in der Projekt-Dokumentation zitiert werden:
+
+- `best_lag` — Lag mit dem grössten Absolut-Korrelationswert
+- `max_abs_corr` — Korrelation an diesem Lag (mit Vorzeichen)
+- `corr_at_lag_0` — gleichzeitige Korrelation
+- `n_median` — mediane Stichprobengrösse über alle Lags
+- `band_95` — Konfidenzband ±1.96/sqrt(n) bei n_median (unkorrigiert)
+
+Output wird in `data/processed/news/lead_lag_results.csv` geschrieben, damit
+die Doku auf eine reproduzierbare Tabelle verweisen kann statt auf hartcodierte
+Zahlen.
+"""))
+
+cells.append(code(r"""
+def summarize(pair: str, way: str, interp: bool) -> dict:
+    df = (assemble_clean if way == "clean" else assemble_dirty)(pair, interpolate=interp)
+    cc = cross_correlation(df["sentiment"], df["return"])
+    if cc["corr"].dropna().empty:
+        return {"pair": pair, "way": way, "interpolation": interp, "best_lag": np.nan,
+                "max_abs_corr": np.nan, "corr_at_lag_0": np.nan, "n_median": 0, "band_95": np.nan}
+    best_idx = cc["corr"].abs().idxmax()
+    best = cc.loc[best_idx]
+    n_med = int(cc["n"].median())
+    return {
+        "pair": pair,
+        "way": way,
+        "interpolation": interp,
+        "best_lag": int(best["lag"]),
+        "max_abs_corr": round(float(best["corr"]), 4),
+        "corr_at_lag_0": round(float(cc.loc[cc["lag"] == 0, "corr"].iloc[0]), 4) if 0 in cc["lag"].values else np.nan,
+        "n_median": n_med,
+        "band_95": round(float(conf_band(n_med)), 4),
+    }
+
+
+rows = []
+for p in PAIRS:
+    for way in ["clean", "dirty"]:
+        for interp in [False, True]:
+            rows.append(summarize(p, way, interp))
+
+results = pd.DataFrame(rows).sort_values(["pair", "way", "interpolation"]).reset_index(drop=True)
+out_path = DATA_DIR / "processed" / "news" / "lead_lag_results.csv"
+out_path.parent.mkdir(parents=True, exist_ok=True)
+results.to_csv(out_path, index=False)
+print(f"Tabelle gespeichert: {out_path}")
+results
+"""))
+
+
 # Aussage / Schluss -------------------------------------------------------
 cells.append(md(r"""
 ## 7. Beantwortung der Hypothese

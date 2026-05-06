@@ -1,0 +1,13 @@
+pair,way,interpolation,best_lag,max_abs_corr,corr_at_lag_0,n_median,band_95
+EUR_CHF,clean,False,2,-0.763,0.0447,7,0.7408
+EUR_CHF,clean,True,-4,0.659,-0.0833,10,0.6198
+EUR_CHF,dirty,False,5,0.3003,-0.0102,85,0.2126
+EUR_CHF,dirty,True,-4,0.2383,0.0042,126,0.1746
+EUR_USD,clean,False,0,0.2035,0.2035,988,0.0624
+EUR_USD,clean,True,0,0.1116,0.1116,1432,0.0518
+EUR_USD,dirty,False,9,-0.2708,-0.0587,85,0.2126
+EUR_USD,dirty,True,-4,-0.2377,-0.0438,126,0.1746
+GBP_USD,clean,False,0,0.2384,0.2384,959,0.0633
+GBP_USD,clean,True,0,0.1799,0.1799,1401,0.0524
+GBP_USD,dirty,False,9,-0.2364,-0.0782,85,0.2126
+GBP_USD,dirty,True,-4,-0.1778,-0.0515,126,0.1746

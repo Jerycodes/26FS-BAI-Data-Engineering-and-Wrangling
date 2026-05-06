@@ -2,23 +2,37 @@
 
 **Modul:** Data Engineering & Wrangling, BAI, FHNW (26FS)
 **Zeitraum der Daten:** 2022-01-01 bis 2026-04-22
-**Stand des Dokuments:** 2026-04-22
+**Stand des Dokuments:** 2026-05-06
 
 ---
 
 ## 1. Projektziel und Fragestellung
 
-Das Projekt untersucht, ob sich zwischen **Wechselkursen** (EUR/USD, EUR/CHF, GBP/USD), **Finanznachrichten-Sentiment** und **Ölpreisen** ein nachvollziehbarer Zusammenhang erkennen lässt. Die Leitfrage lautet:
+Das Projekt untersucht, ob sich zwischen **Wechselkursen** (EUR/USD, EUR/CHF, GBP/USD), **Finanznachrichten-Sentiment** und **Ölpreisen** ein nachvollziehbarer Zusammenhang erkennen lässt.
 
-> *Bewegen sich Wechselkurse in eine Richtung, wenn das Sentiment in den zugehörigen Finanznachrichten ausreichend deutlich positiv oder negativ ist — und spielt der Ölpreis als Kontext eine erkennbare Rolle?*
+### Hypothese
 
-Der Fokus liegt nicht auf einem Prognose-Modell, sondern auf **sauberer Datenaufbereitung**: Daten aus heterogenen Quellen vergleichbar machen, Qualitätsprobleme erkennen und dokumentieren, Methodenentscheidungen begründen. Die Analyse dient als Anwendungsfall; die Datenaufbereitung ist das eigentliche Produkt.
+> *Hat das Sentiment von Finanznachrichten einen Einfluss auf Währungskurse — und wenn ja, wie viel?*
+
+Methodisch konkretisiert in eine **Lead/Lag-Frage**:
+
+- **Hypothese H1** (Sentiment führt): Sentiment am Tag $t$ sagt Returns am Tag $t+k$ vorher (für ein $k > 0$). Wenn negative News heute auftauchen, fällt der Kurs in den folgenden Tagen.
+- **Alternative A1** (gleichzeitig): Sentiment und Returns bewegen sich gemeinsam ($k = 0$), Sentiment ist Begleitinformation, kein Vorlauf.
+- **Alternative A2** (Markt führt): Returns laufen Sentiment voraus ($k < 0$), die News reagieren auf den Markt, nicht umgekehrt.
+
+Die Operationalisierung erfolgt im Notebook `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb`. Resultate stehen in Abschnitt 12.
+
+### Wie der Dozent das Projekt geframet hat
+
+Bewertet wird **nicht das Prognose-Modell**, sondern der Umgang mit unsauberen Daten: aus heterogenen Quellen vergleichbare Reihen bauen, Qualitätsprobleme erkennen und dokumentieren, Methodenentscheidungen begründen. Die Hypothesen-Antwort ist ein Anwendungsbeispiel; die Datenaufbereitung ist das eigentliche Produkt.
+
+Die Pflicht-Verarbeitungsschritte gemäss Vorgaben-Folie sind: **Datenbereinigung, Datentransformation, Qualitätsprüfung, Pipeline, Visualisierung, Analyse** — diese gliedern auch die Doku (Abschnitte 4–12).
 
 ### Was das Projekt **nicht** ist
 
 - Kein Trading-System, kein Backtesting.
 - Kein Maschinelles-Lernen-Modell.
-- Keine Kausalaussage ("Sentiment verursacht Kursbewegung"), sondern Beobachtung von Korrelation im deskriptiven Sinn.
+- Keine Kausalaussage ("Sentiment verursacht Kursbewegung"), sondern eine deskriptive Beobachtung zeitlicher Vorhersagbarkeit. Granger-Causality oder ökonometrische Identifikation sind in Sektion 12 als Erweiterung vermerkt, aber nicht implementiert.
 
 ---
 
@@ -61,7 +75,7 @@ Drei Schichten:
 2. **`data/processed/`** — harmonisierte, zusammengeführte Zwischenergebnisse. Produziert durch die Notebooks oder die Helper-Scripts in `scripts/`.
 3. **`data/final/`** — fertige End-Datensätze, die in Bericht oder Dashboard einfließen.
 
-**Reproduzierbarkeit:** Jeder Schritt kann mit einem einzigen Befehl neu ausgeführt werden. Siehe Abschnitt 12.
+**Reproduzierbarkeit:** Jeder Schritt kann mit einem einzigen Befehl neu ausgeführt werden. Siehe Abschnitt 13.
 
 ---
 
@@ -80,8 +94,9 @@ Der Umgang wurde für jeden Datentyp separat entschieden. Generelles Prinzip: **
 
 - Wenn an einem Tag **kein Artikel** in EODHD oder im Webscraping-Pool vorliegt (typisch: Wochenenden, Feiertage, thin-news-Tage), bleibt die Sentiment-Zeitreihe **NaN**.
 - **Kein Interpolieren — nirgends.** Weder im Rohdatenlayer noch im Processing, noch im Dashboard. Selbst wenn der User im Dashboard die Interpolations-Checkbox aktiviert, werden Sentiment-Reihen explizit ausgenommen.
-- Begründung: Imputation wäre irreführend, weil es **keine Nachricht ≠ neutrale Nachricht** ist. Eine Null-Imputation oder Zeit-Interpolation würde falschen Einfluss auf das Tagesmittel haben und eine nicht vorhandene Nachrichtenlage vortäuschen.
-- Bei der Aggregation auf Wochen/Monate ignoriert pandas NaN automatisch (`skipna=True`), d.h. Wochen mit 2 statt 5 News-Tagen werden immer noch aggregierbar, nur eben auf Basis der vorhandenen Tage.
+- **Begründung methodisch (MNAR):** Die Vorlesung W2 (`slides/Folien.pdf`, S. 11) unterscheidet MCAR / MAR / MNAR. Tage ohne Artikel sind hier **MNAR**: ob ein Artikel existiert, hängt direkt davon ab, ob etwas passiert ist — also vom *fehlenden Wert selbst*. Imputation bei MNAR erzeugt strukturelle Verzerrung, weil "kein Artikel" inhaltlich **nicht** "neutraler Artikel" bedeutet. Eine Null-Imputation oder Zeit-Interpolation würde eine Nachrichtenlage vortäuschen, die es nicht gab.
+- Die Slides empfehlen für Zeitreihen zwar grundsätzlich "vorherige oder zukünftige Werte zum Auffüllen" (W2, S. 16) — wir weichen für Sentiment **bewusst** davon ab, weil die Auffüll-Logik dort für stetige physikalische Grössen gedacht ist, nicht für ereignisbedingte Zähldaten.
+- Bei der Aggregation auf Wochen/Monate ignoriert pandas NaN automatisch (`skipna=True`), d.h. Wochen mit 2 statt 5 News-Tagen werden weiterhin aggregierbar, nur eben auf Basis der vorhandenen Tage.
 
 ### 4.3 Öl-Daten
 
@@ -117,15 +132,23 @@ Der Umgang wurde für jeden Datentyp separat entschieden. Generelles Prinzip: **
 
 Ziel: Alle Quellen mit demselben Schema ansprechbar machen, damit ein Vergleich möglich ist.
 
-| Dimension | Ausgangslage | Harmonisierung |
-|---|---|---|
-| **Zeitzone** | Yahoo UTC, EODHD naive lokal, MT5 Broker-TZ, RSS/Reddit je nach Feed | Alle auf timezone-naive normalisiert, auf Tagesebene gerundet (`.normalize()` oder `.ceil("D")` je nach Quelle) |
-| **Spaltennamen** | `Open/High/Low/Close` (Yahoo), `open/high/low/close` (EODHD), `<OPEN>/<HIGH>/…` (MT5) | Alle auf lowercase `open/high/low/close` |
-| **Datumsformat** | ISO-Strings, YYYY.MM.DD (MT5), Epoch-Sekunden (Reddit) | In `pd.Timestamp` via `pd.to_datetime(..., errors="coerce")` |
-| **Währungspaar-Schreibweise** | `EURUSD=X` (Yahoo), `EURUSD.FOREX` (EODHD), `EURUSD` (MT5) | Intern einheitlich `EUR_USD`, `EUR_CHF`, `GBP_USD` |
-| **Feld-Struktur News** | Sentiment als verschachteltes Dict (EODHD) vs. kein Sentiment (RSS) | `pd.json_normalize()` flattet das EODHD-Dict zu `polarity`, `neg`, `neu`, `pos` |
+**Theorie-Bezug (W4, `slides/W04_dwae.pdf`, S. 8):** Die Vorlesung unterscheidet drei Dimensionen der Heterogenität, an denen wir uns hier explizit ausrichten:
 
-Der harmonisierte Forex-Output liegt in `data/processed/forex/forex_alle_quellen_kombiniert.csv`: Ein Long-Format, in dem jede Zeile ein Paar-Datum-Kombination ist und Spalten wie `yahoo_close`, `eodhd_close`, `metatrader_close` nebeneinander stehen. Zusätzlich: `weekday`, `is_weekend`, `n_sources`, `has_gap` für spätere Filter.
+1. **Syntax** — unterschiedliche Datenformate (CSV, JSON, HTML, Tab-getrennt für MT5).
+2. **Struktur** — unterschiedliche Schemas (Spaltenreihenfolgen, geschachtelte Dicts vs. flach).
+3. **Semantik** — gleiche Begriffe, unterschiedliche Bedeutungen (z. B. "close" als New-York-Schluss vs. London-Schluss).
+
+| Dimension (W4) | Ausgangslage | Harmonisierung |
+|---|---|---|
+| **Syntax — Zeitzone** | Yahoo UTC, EODHD naive lokal, MT5 Broker-TZ, RSS/Reddit je nach Feed | Alle auf timezone-naive normalisiert, auf Tagesebene gerundet (`.normalize()` oder `.ceil("D")` je nach Quelle) |
+| **Struktur — Spaltennamen** | `Open/High/Low/Close` (Yahoo), `open/high/low/close` (EODHD), `<OPEN>/<HIGH>/…` (MT5) | Alle auf lowercase `open/high/low/close` |
+| **Syntax — Datumsformat** | ISO-Strings, YYYY.MM.DD (MT5), Epoch-Sekunden (Reddit) | In `pd.Timestamp` via `pd.to_datetime(..., errors="coerce")` |
+| **Semantik — Währungspaar-Schreibweise** | `EURUSD=X` (Yahoo), `EURUSD.FOREX` (EODHD), `EURUSD` (MT5) | Intern einheitlich `EUR_USD`, `EUR_CHF`, `GBP_USD` |
+| **Struktur — News-Felder** | Sentiment als verschachteltes Dict (EODHD) vs. kein Sentiment (RSS) | `pd.json_normalize()` flattet das EODHD-Dict zu `polarity`, `neg`, `neu`, `pos` |
+
+W4 (S. 13) kategorisiert die Harmonisierung als **retrospektiv** — sie passiert *nach* der Datenerhebung, weil wir keine Kontrolle über die Quellsysteme haben. Das ist gemäss Slide "die häufigste Form in der Praxis", limitiert aber die erreichbare Datenqualität (S. 15: Trade-offs zwischen Validität, Reliabilität, Abdeckung, Granularität).
+
+Der harmonisierte Forex-Output liegt in `data/processed/forex/forex_alle_quellen_kombiniert.csv`: Ein Long-Format, in dem jede Zeile eine Paar-Datum-Kombination ist und Spalten wie `yahoo_close`, `eodhd_close`, `metatrader_close` nebeneinander stehen. Zusätzlich: `weekday`, `is_weekend`, `n_sources`, `has_gap` für spätere Filter.
 
 ---
 
@@ -135,7 +158,8 @@ Der harmonisierte Forex-Output liegt in `data/processed/forex/forex_alle_quellen
 
 - Tagesbasis = erste sinnvolle gemeinsame Auflösung mit Forex-Daten.
 - Aggregation der Polarity über alle Artikel eines Tages: **Median** statt Mittel.
-- Begründung: Ein einzelner Artikel mit extremer Polarity (±1.0) kann den Tagesmittelwert stark verziehen. Der Median ist robust und spiegelt die zentrale Tendenz der Nachrichtenlage besser wider. Das ist im Kurs und in der Statistik-Literatur als Standard-Argument gegen Ausreisser etabliert.
+- **Begründung mit Slides-Bezug (W3, `slides/Folien 2.pdf`, S. 19/25):** Die Vorlesung empfiehlt für ausreisser-anfällige Daten den `RobustScaler`, der genau die Kombination Median + IQR verwendet — mit der Begründung "Ausreisser beeinflussen Median & IQR kaum → robustere Skalierung". Wir wenden dieselbe Logik auf die Tages-Aggregation der Polarity an: Ein einzelner Artikel mit extremer Polarity (±1.0) kann den Tagesmittelwert stark verziehen, der Median bleibt davon unbeeinflusst.
+- **Quantitatives Bild der Verteilung:** Die Polarity-Werte sind nicht normalverteilt, sondern haben starke Konzentrationen bei 0 (TextBlob-Default für Texte ohne Lexikon-Treffer) und vereinzelte Extremwerte. Bei dieser Verteilungsform ist der Median fast immer aussagekräftiger als das Mittel.
 
 ### 7.2 Aggregation auf Wochen/Monate/Quartale
 
@@ -251,9 +275,88 @@ Streamlit-App (`dashboard.py`). Aktuelle Seiten:
 
 Caching über `@st.cache_data`, damit wiederholte Navigation flüssig bleibt.
 
+### 11.1 Visualisierungs-Entscheidungen mit Slide-Bezug
+
+Die Plot-Wahl folgt der Vorlesung W8 (`slides/Folien 2 2.pdf`):
+
+| Entscheidung | Slide-Quelle | Begründung |
+|---|---|---|
+| **Linien- statt Bar-Charts für Zeitreihen** | W8, S. 6 | Wahrnehmungs-Ranking: Position auf gemeinsamer Skala ist die effizienteste visuelle Codierung für quantitative Daten |
+| **Vollständige Y-Achse (kein Zoomen auf engen Bereich)** | W8, S. 9–14 | Anti-Pattern abgeschnittener Achsen ("Fox-News-Beispiel") — gleiche Daten können je nach Achsenwahl Trends suggerieren oder verbergen |
+| **2D, nicht 3D** | W8, S. 16–18 | "3D-Pie-Charts verzerren Verhältnisse durch Perspektive" — Heatmaps und Linien sind besser lesbar |
+| **Viridis statt Jet bei sequenziellen Skalen** | W8, S. 24 | "Jet — nicht gleichmässig wahrnehmbar; Viridis — gleichmässig wahrnehmbar (perceptually uniform)" |
+| **Divergierende Farbpalette für Sentiment** | W8, S. 29 | Sentiment hat einen natürlichen Mittelpunkt bei 0 — divergierende Skalen heben Vorzeichen heraus |
+| **Tableau-Standardpalette für kategoriale Quellenunterscheidung** | W8 + Claude | Yahoo / EODHD / MetaTrader sind kategorial, kein Ordinalverhältnis → kontrastreiche Standardfarben statt Verlauf |
+| **Mehrachsen-Layout je Kategorie** (Forex / Öl / Sentiment) | Claude | Drei Reihen mit unterschiedlichen Skalen sollten getrennte Y-Achsen haben, sonst dominiert die Reihe mit grösster Varianz die Optik |
+| **Rasterlinien transparent (`alpha=0.3`)** | W8, S. 34 | "Transparenz im Bereich 15%–45% am wirkungsvollsten" |
+| **Farbenblind-Verträglichkeit** | W8, S. 21 | "Ca. 8% der Männer hat eine Rot-Grün-Schwäche" — Tableau-Defaults und Viridis sind beide CB-tauglich |
+
 ---
 
-## 12. Reproduzierbarkeit — Befehle und Reihenfolge
+## 12. Analyse-Resultate: Lead/Lag
+
+Die Hypothese aus Abschnitt 1 wird im Notebook `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb` operationalisiert: Cross-Korrelation $\hat\rho_k = \mathrm{corr}(\text{sentiment}_t, \text{return}_{t+k})$ für $k \in [-10, +10]$ Handelstage, parallel auf saubererm und Dirty-Pfad, jeweils mit und ohne Forex-Interpolation.
+
+**Methodik kurz** (vollständig im Notebook): Forex wird als Mittelwert der verfügbaren Quellen pro Tag genommen, daraus Log-Returns; Sentiment ist der Tagesmedian der Polarity. Konfidenzband $\pm 1{.}96/\sqrt{n}$ unter $H_0\!: \rho = 0$ — Pearson-Approximation, ohne Multiple-Testing-Korrektur. Bei 21 getesteten Lags würde Bonferroni das Band auf etwa $\pm 2{.}80/\sqrt{n}$ aufweiten.
+
+### 12.1 Resultate-Tabelle
+
+Reproduzierbar via `data/processed/news/lead_lag_results.csv` (vom Notebook erzeugt).
+
+| Paar | Weg | Interp | best lag | r am best lag | r bei k=0 | n_med | ±band 95% |
+|---|---|---|---:|---:|---:|---:|---:|
+| EUR/USD | clean (EODHD) | nein | **0** | **+0.20** | +0.20 | 988 | ±0.06 |
+| EUR/USD | clean (EODHD) | ja   | 0 | +0.11 | +0.11 | 1432 | ±0.05 |
+| GBP/USD | clean (EODHD) | nein | **0** | **+0.24** | +0.24 | 959 | ±0.06 |
+| GBP/USD | clean (EODHD) | ja   | 0 | +0.18 | +0.18 | 1401 | ±0.05 |
+| EUR/CHF | clean (EODHD) | nein | 2 | −0.76 | +0.04 | **7** | ±0.74 |
+| EUR/CHF | clean (EODHD) | ja   | −4 | +0.66 | −0.08 | 10 | ±0.62 |
+| EUR/USD | dirty (Webscraping) | nein | 9 | −0.27 | −0.06 | 85 | ±0.21 |
+| EUR/USD | dirty (Webscraping) | ja   | −4 | −0.24 | −0.04 | 126 | ±0.17 |
+| GBP/USD | dirty (Webscraping) | nein | 9 | −0.24 | −0.08 | 85 | ±0.21 |
+| GBP/USD | dirty (Webscraping) | ja   | −4 | −0.18 | −0.05 | 126 | ±0.17 |
+| EUR/CHF | dirty (Webscraping) | nein | 5 | +0.30 | −0.01 | 85 | ±0.21 |
+| EUR/CHF | dirty (Webscraping) | ja   | −4 | +0.24 | +0.00 | 126 | ±0.17 |
+
+### 12.2 Beantwortung der Hypothese
+
+**Sauberer Weg, EUR/USD und GBP/USD:** Das Maximum der Cross-Korrelation liegt eindeutig bei $k = 0$ mit $r \approx +0.20$ bis $+0.24$. Bei $n \approx 1000$ ist das Konfidenzband $\pm 0{.}06$ — die Korrelation ist hochsignifikant, **aber sie ist gleichzeitig**. Bei $|k| > 0$ fällt $|r|$ deutlich unter das Konfidenzband.
+
+**Aussage:** **H1 (Sentiment führt Kurs) wird nicht gestützt.** Das Ergebnis ist konsistent mit **A1 (gleichzeitige Bewegung)**: Sentiment und Kurs reagieren auf dieselben Marktinformationen, ohne dass eine Reihe der anderen vorausläuft. Sentiment ist hier **Begleitinformation**, kein Prognoseinstrument.
+
+**Dirty Weg, EUR/USD und GBP/USD:** Das Maximum verschiebt sich auf $k = +9$ mit $r \approx -0.27$ bzw. $-0.24$. Vorzeichen umgekehrt zum sauberen Weg, $n = 85$. Konfidenzband ohne Korrektur $\pm 0{.}21$, Bonferroni $\pm 0{.}30$. Damit liegt das Resultat **auf der Signifikanzschwelle und wird nach Multiple-Testing-Korrektur nicht mehr robust**. Ohne weitere Daten lässt sich daraus kein Lead-Effekt ableiten.
+
+**Sauberer Weg, EUR/CHF:** $r = -0{.}76$ bei $k = 2$ klingt beeindruckend, aber $n = 7$ und Konfidenzband $\pm 0{.}74$ — der "Effekt" ist statistisch nicht von Null unterscheidbar. Das ist das Lehrbeispiel **"Effekt-Grösse ohne Stichprobengrösse ist wertlos"** und wird in Sektion 13 (Limitationen) als negative Evidence dokumentiert.
+
+### 12.3 Effekt der Interpolation
+
+Für EUR/USD und GBP/USD sinkt $r$ mit linear interpolierten Forex-Returns von ca. $0{.}20$ auf $0{.}11$–$0{.}18$. **Das ist erwartbar und methodisch korrekt:** interpolierte Wochenend-Returns sind synthetisch konstruiert und enthalten kein neues Informations-Signal — sie verdünnen die Stichprobe ohne Aussagekraft hinzuzufügen.
+
+**Konsequenz für die Doku:** Die Variante **ohne Interpolation** ist der primäre Auswertungspfad. Die interpolierte Variante dient als Sensitivitätscheck und zeigt, dass das Lead/Lag-Resultat methodenrobust ist — die Aussage "gleichzeitige Korrelation, kein Lead" gilt in beiden Varianten.
+
+### 12.4 Vergleich der zwei Wege
+
+| Befund | Sauberer Weg | Dirty Weg |
+|---|---|---|
+| Vorzeichen der Maximalkorrelation | positiv | negativ |
+| Lag des Maximums | 0 (gleichzeitig) | +9 (verzögert) |
+| Stichprobengrösse | gross (~1000) | klein (~85) |
+| Robust nach Multiple Testing? | ja | nein |
+| Aussage | klar gleichzeitig | nicht entscheidbar |
+
+Dass die zwei Wege auseinanderfallen, ist **selbst ein Resultat**: Das EODHD-Sentiment ist für EUR/USD und GBP/USD pro Paar gefiltert (98–99 % Coverage), das Webscraping-Sentiment ist global über alle Forex-News aggregiert. Die unterschiedlichen Befunde zeigen, dass paar-spezifisches Sentiment qualitativ andere Information trägt als globales Forex-Sentiment.
+
+### 12.5 Methodische Limitationen (sind Teil der Antwort)
+
+- **Korrelation ≠ Kausalität.** Selbst die starke gleichzeitige Korrelation auf dem sauberen Weg zeigt nur, dass Markt und News gemeinsam reagieren — nicht *warum*. Ein gemeinsamer dritter Faktor (Makrodaten, Notenbank-Entscheidungen) erklärt beide.
+- **Lead/Lag wird in der Vorlesung nicht behandelt** — die Methodik orientiert sich an Standard-Statistik-Literatur (Quelle: Claude). Ein formaler **Granger-Test** wäre der nächste methodische Schritt; er ist im Notebook als deaktivierte Cell vorbereitet (`statsmodels`-Abhängigkeit nicht in `requirements.txt`).
+- **EUR/CHF EODHD ist keine Datenquelle** im praktischen Sinn — 7 Datenpunkte. Wir dokumentieren das als negative Evidence der EODHD-Coverage, nicht als Resultat über das Paar.
+- **Webscraping-Sentiment ist nicht paar-spezifisch.** Wir verwenden denselben Tageswert für alle drei Paare; eine paar-spezifische Filterung würde unter ~30 Tagen Coverage pro Paar fallen und keine Aussage mehr zulassen.
+- **TextBlob auf Finanztexten** — siehe Abschnitt 8.4: ~33 % der Artikel bekommen Polarity 0. Ein finanzspezifisches Modell (FinBERT, VADER + Loughran-McDonald-Lexikon) würde die Sentiment-Stichprobe deutlich vergrössern.
+
+---
+
+## 13. Reproduzierbarkeit — Befehle und Reihenfolge
 
 Alle Schritte sind idempotent. Die Reihenfolge:
 
@@ -271,15 +374,21 @@ python src/data_loading/oil_loader.py
 python scripts/regenerate_forex_combined.py
 python scripts/regenerate_webscraping_sentiment.py
 
-# 3. Dashboard starten
+# 3. Lead/Lag-Notebook regenerieren (erzeugt auch lead_lag_results.csv)
+python scripts/generate_lead_lag_notebook.py
+jupyter nbconvert --to notebook --execute \
+    notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb \
+    --output sentiment_kurs_lead_lag_analyse.ipynb
+
+# 4. Dashboard starten
 streamlit run dashboard.py
 ```
 
-Die Notebooks in `notebooks/` sind zusätzliche EDA- und Analyseartefakte. Sie sind nicht Voraussetzung für das Dashboard, liefern aber die ausführlichen Ergebnistabellen und Visualisierungen, die für den Bericht relevant sind.
+Die Notebooks in `notebooks/` sind zusätzliche EDA- und Analyseartefakte. Sie sind nicht Voraussetzung für das Dashboard, liefern aber die ausführlichen Ergebnistabellen und Visualisierungen, die für den Bericht relevant sind. Das Lead/Lag-Notebook ist die Quelle der Resultate-Tabelle in Abschnitt 12.
 
 ---
 
-## 13. Bekannte Einschränkungen
+## 14. Bekannte Einschränkungen
 
 | Punkt | Auswirkung | Behandlung |
 |---|---|---|
@@ -295,7 +404,7 @@ Der SSL-Bug beim Scraper ist ein gutes Beispiel für den iterativen Umgang mit D
 
 ---
 
-## 14. Projektstruktur (Kurzübersicht)
+## 15. Projektstruktur (Kurzübersicht)
 
 ```
 datawrangling/
@@ -315,6 +424,7 @@ datawrangling/
 │       ├── datenanalyse_oil.ipynb
 │       ├── news_forex_korrelation_kombiniert.ipynb
 │       ├── sentiment_analyse_vergleich.ipynb
+│       ├── sentiment_kurs_lead_lag_analyse.ipynb   # Hauptanalyse für Sektion 12
 │       └── poc_webscraping_sentiment.ipynb
 ├── data/
 │   ├── raw/                   # Rohdaten, nicht verändert
@@ -327,7 +437,7 @@ datawrangling/
 
 ---
 
-## 15. Protokoll — Chronologie der wichtigsten Entscheidungen
+## 16. Protokoll — Chronologie der wichtigsten Entscheidungen
 
 | Datum (2026) | Entscheidung / Beobachtung |
 |---|---|
@@ -345,10 +455,17 @@ datawrangling/
 | 22.04. | Altdaten (Dateien mit `_to_2026-03-25`) in `data_archive/` verschoben. Ordner via `.gitignore` aus dem Repo gehalten, bleibt lokal verfügbar. |
 | 22.04. | Präzisierung: die Interpolations-Option in Master Grafik 1 und 2 überspringt Sentiment-Reihen. Begründung siehe 4.2. |
 | 22.04. | Neue Dashboard-Seite „Workflow" mit Graphviz-Diagramm der Pipeline (Rohdaten → Loader → Raw-Storage → Processing → Processed-Storage → Dashboard). |
+| 06.05. | Streamlit-Cloud-Deploy: zwei Bugs gefixt — `KeyError: date_only` im EODHD-News-Loader (`date_only` aus `date.dt.normalize()` ableiten statt aus CSV lesen) und `TypeError` bei `pd.concat` der Master-Grafik (EODHD-Datum mit `utc=True` parsen, dann `tz_convert(None)`). Commits `2b8d4ae`, `13140fe`. |
+| 06.05. | Lead/Lag-Notebook erstellt (`sentiment_kurs_lead_lag_analyse.ipynb`) als zentrale Analyse für die Hypothese aus Sektion 1. Methodik: Cross-Korrelation Sentiment vs. Forex-Log-Returns, Lags ±10, beide Wege parallel, mit/ohne Interpolation als Sensitivitätscheck. Resultate in `data/processed/news/lead_lag_results.csv` und Sektion 12 dieser Doku. |
+| 06.05. | Methodik-Klärung dokumentiert: Outer-Join in `forex_alle_quellen_kombiniert.csv` bleibt ohne Interpolation und ohne Mittelwert; Mittelwert wird zur Laufzeit gebildet, Interpolation ist optional und wird im Lead/Lag-Notebook explizit gegen die Variante ohne Interpolation verglichen. Die `_v2`-Outputs aus `news_forex_korrelation_kombiniert.ipynb` (Interpolation+Mittelwert vorab) werden als alternative Methodik-Spur gehalten, sind aber nicht der primäre Auswertungspfad. |
 
 ---
 
-## 16. Offen / ToDo
+## 17. Offen / ToDo
 
+- **Statischer Bericht**: PDF/Word-Version mit fixierten Plots (statt nur interaktivem Dashboard) für direkte Vergleichbarkeit, gemäss Wunsch der Studierenden. Architektur-Diagramm aus der Workflow-Dashboard-Seite als statisches PNG exportieren.
+- **Repo-Aufräumung vor Abgabe**: Doppelte/veraltete Notebooks bereinigen — `notebooks/04_eda_news_webscraping.ipynb` (Top-Level) ist Doppelgänger zur Version in `rohdaten_laden/`; `_fenlin`-Variante und `Test_datenanalyse.ipynb` evaluieren; `Folien 4.pdf`/`Folien 5.pdf`/`Folien 6.pdf` im `slides/`-Ordner sind byte-identische Doppel von `W04_dwae.pdf` und `W05_dwae.pdf` (Slide-Agent-Befund 06.05.); `data_archive/`-Struktur befüllen.
+- **Granger-Causality-Test**: Im Lead/Lag-Notebook als deaktivierte Cell vorbereitet — `pip install statsmodels` und Aktivierung der Cell genügen. Bei einer formellen Auswertung ist Granger der nächste methodische Schritt nach Cross-Korrelation.
+- **FinBERT / VADER mit Loughran-McDonald-Lexikon** als Sentiment-Methode für Finanztexte evaluieren — würde die ~33 % Null-Polarity bei TextBlob deutlich reduzieren und ist eine inhaltlich sinnvolle Erweiterung.
 - Optional: `news_forex_korrelation_kombiniert.ipynb` mit aktualisierten Daten neu durchlaufen, um die `_v2`-CSVs zu regenerieren (Dashboard ist nicht davon abhängig).
 - Optional: Fenlins parallele Arbeit (`05_merge_und_korrelation.ipynb`, `data/final/forex_news_merged.csv`) mit dem PoC-Pfad abgleichen und ggf. konsolidieren.
