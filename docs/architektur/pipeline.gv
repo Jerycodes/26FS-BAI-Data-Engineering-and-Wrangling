@@ -1,0 +1,122 @@
+// Quelle: extrahiert aus dashboard.py "Workflow"-Seite (Stand 2026-05-06).
+// Identisch zu st.graphviz_chart(workflow_dot, ...) im Dashboard, damit der
+// statische Bericht und das interaktive Dashboard dasselbe Diagramm zeigen.
+//
+// Rendern:
+//   dot -Tpng pipeline.gv -o pipeline.png
+//   dot -Tsvg pipeline.gv -o pipeline.svg
+// (Dot via `brew install graphviz`. Alternativ online: https://dreampuf.github.io/GraphvizOnline/)
+
+digraph workflow {
+    rankdir=LR;
+    bgcolor="white";
+    node [fontname="Helvetica", fontsize=10, style="filled,rounded", shape=box, margin="0.15,0.08"];
+    edge [fontname="Helvetica", fontsize=9, color="#888"];
+
+    // Farben nach Schicht
+    subgraph cluster_sources {
+        label="1. Rohdaten-Quellen";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        yahoo   [label="Yahoo Finance\n(Forex + Öl)",          fillcolor="#E3F2FD"];
+        eodhd   [label="EODHD API\n(Forex + News)",             fillcolor="#E3F2FD"];
+        mt5     [label="MetaTrader 5\n(Daily + M15)",           fillcolor="#E3F2FD"];
+        rss     [label="RSS-Feeds\n(ForexLive, FXStreet, ...)", fillcolor="#E3F2FD"];
+        reddit  [label="Reddit\n(r/Forex, r/investing, ...)",   fillcolor="#E3F2FD"];
+    }
+
+    subgraph cluster_loaders {
+        label="2. Loader (Dedup + Harmonisierung)";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        yahoo_l   [label="yahoo_loader.py",          fillcolor="#FFF9C4"];
+        eodhd_l   [label="eodhd_loader.py",          fillcolor="#FFF9C4"];
+        news_l    [label="eodhd_news_loader.py",     fillcolor="#FFF9C4"];
+        web_l     [label="webscraping_loader.py\n(requests + feedparser)", fillcolor="#FFF9C4"];
+        oil_l     [label="oil_loader.py",            fillcolor="#FFF9C4"];
+    }
+
+    subgraph cluster_raw {
+        label="3. data/raw/";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        raw_fx    [label="forex/{yahoo,eodhd,metatrader}", fillcolor="#FFE0B2"];
+        raw_news  [label="news/{eodhd,webscraping}",       fillcolor="#FFE0B2"];
+        raw_oil   [label="oil/yahoo",                      fillcolor="#FFE0B2"];
+    }
+
+    subgraph cluster_processed {
+        label="4. Processing (Notebooks + Scripts)";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        fx_combine  [label="regenerate_forex_combined.py\n(Kombination Yahoo+EODHD+MT5,\nLücken-Flag)", fillcolor="#C8E6C9"];
+        news_sent   [label="regenerate_webscraping_sentiment.py\n(Dedup auf link,\nTextBlob-Polarity,\nTages-Median)", fillcolor="#C8E6C9"];
+        eodhd_sent  [label="sentiment_analyse_vergleich.ipynb\n(TextBlob auf EODHD-Text\n vs. EODHD-Polarity)",          fillcolor="#C8E6C9"];
+        lead_lag    [label="generate_lead_lag_notebook.py\n(Cross-Korrelation\nSentiment vs. Returns)", fillcolor="#C8E6C9"];
+    }
+
+    subgraph cluster_processed_data {
+        label="5. data/processed/";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        fx_combined   [label="forex_alle_quellen\n_kombiniert.csv",        fillcolor="#FFE0B2"];
+        ws_daily      [label="webscraping_sentiment\n_daily.csv",          fillcolor="#FFE0B2"];
+        ws_articles   [label="webscraping_articles\n_sentiment.csv",       fillcolor="#FFE0B2"];
+        ll_results    [label="lead_lag_results.csv",                       fillcolor="#FFE0B2"];
+    }
+
+    subgraph cluster_dashboard {
+        label="6. Streamlit-Dashboard (dashboard.py) + Notebooks";
+        fontname="Helvetica"; fontsize=11; style=rounded; color="#999";
+        mg1  [label="Master Grafik 1\n(sauberer Weg:\nEODHD-Sentiment)",                fillcolor="#BBDEFB"];
+        mg2  [label="Master Grafik 2\n(Proof of Concept:\nWebscraping + TextBlob)",      fillcolor="#BBDEFB"];
+        svg  [label="Sentiment-Vergleich\n(EODHD vs. TextBlob)",                         fillcolor="#BBDEFB"];
+        ll_nb [label="sentiment_kurs_lead_lag\n_analyse.ipynb\n(Hypothesen-Antwort)",    fillcolor="#BBDEFB"];
+        other [label="Übersicht, Quellenvergleich,\nLückenanalyse, Preisabweichungen,\nÖlpreise, Nachrichten", fillcolor="#BBDEFB"];
+    }
+
+    // Kanten: Rohdatenquelle -> Loader
+    yahoo  -> yahoo_l;
+    eodhd  -> eodhd_l;
+    eodhd  -> news_l;
+    mt5    -> raw_fx    [label="manueller Export"];
+    rss    -> web_l;
+    reddit -> web_l;
+    yahoo  -> oil_l;
+
+    // Loader -> Raw-Storage
+    yahoo_l -> raw_fx;
+    eodhd_l -> raw_fx;
+    news_l  -> raw_news;
+    web_l   -> raw_news;
+    oil_l   -> raw_oil;
+
+    // Raw -> Processing
+    raw_fx   -> fx_combine;
+    raw_news -> news_sent;
+    raw_news -> eodhd_sent;
+    raw_fx   -> lead_lag;
+    raw_news -> lead_lag;
+
+    // Processing -> Processed Storage
+    fx_combine -> fx_combined;
+    news_sent  -> ws_daily;
+    news_sent  -> ws_articles;
+    lead_lag   -> ll_results;
+
+    // Processed -> Dashboard / Notebooks
+    fx_combined -> mg1;
+    fx_combined -> mg2;
+    fx_combined -> other;
+    fx_combined -> lead_lag;
+    ws_daily    -> lead_lag;
+    raw_news    -> mg1      [label="EODHD-Polarity\n(aus raw)"];
+    ws_daily    -> mg2;
+    ws_articles -> mg2      [label="Source-Filter"];
+    raw_news    -> svg;
+    raw_oil     -> mg1;
+    raw_oil     -> mg2;
+    raw_oil     -> other;
+    lead_lag    -> ll_nb;
+
+    // Doku rechts unten
+    doc [label="DOKUMENTATION.md / .docx\n(Projekt-Protokoll)", shape=note, fillcolor="#F5F5F5"];
+    fx_combined -> doc [style=dashed, color="#BBB"];
+    ws_daily    -> doc [style=dashed, color="#BBB"];
+    ll_results  -> doc [style=dashed, color="#BBB"];
+}

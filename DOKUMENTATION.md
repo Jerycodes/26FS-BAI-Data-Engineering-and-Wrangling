@@ -77,6 +77,8 @@ Drei Schichten:
 
 **Reproduzierbarkeit:** Jeder Schritt kann mit einem einzigen Befehl neu ausgeführt werden. Siehe Abschnitt 13.
 
+**Visualisierung:** Das Pipeline-Diagramm ist als Graphviz-Quelle in `docs/architektur/pipeline.gv` abgelegt und im Dashboard interaktiv sichtbar (Seite "Workflow"). Render-Anleitung steht in `docs/architektur/README.md` — für den Word-/PDF-Bericht das PNG erzeugen und einbinden.
+
 ---
 
 ## 4. Umgang mit fehlenden Werten
