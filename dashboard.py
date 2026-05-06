@@ -114,7 +114,7 @@ def load_news_eodhd():
         if files:
             df = pd.read_csv(files[-1])
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            df["date_only"] = pd.to_datetime(df["date_only"], errors="coerce")
+            df["date_only"] = df["date"].dt.normalize()
             df["symbols_list"] = df["symbols"].apply(_parse)
             df["tags_list"] = df["tags"].apply(_parse)
             sym = pair_symbol[pair]
