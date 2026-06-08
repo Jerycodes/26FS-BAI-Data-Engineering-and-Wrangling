@@ -1,477 +1,501 @@
-# Projekt-Dokumentation: Forex, News-Sentiment & Ölpreise
+# Projektdokumentation: Wechselkurse, Nachrichten-Sentiment und Ölpreise
 
-**Modul:** Data Engineering & Wrangling, BAI, FHNW (26FS)
-**Zeitraum der Daten:** 2022-01-01 bis 2026-04-22
-**Stand des Dokuments:** 2026-05-06
+**Modul:** Data Engineering & Wrangling, Studiengang Business Artificial Intelligence (BAI), Fachhochschule Nordwestschweiz (FHNW), Frühjahrssemester 2026
+**Datenzeitraum im Projekt:** 2022-01-01 bis 2026-04-22
+**Untersuchungsfokus:** EUR/USD, EUR/CHF, GBP/USD
+**Stand des Dokuments:** 2026-06-08
 
----
-
-## 1. Projektziel und Fragestellung
-
-Das Projekt untersucht, ob sich zwischen **Wechselkursen** (EUR/USD, EUR/CHF, GBP/USD), **Finanznachrichten-Sentiment** und **Ölpreisen** ein nachvollziehbarer Zusammenhang erkennen lässt.
-
-### Hypothese
-
-> *Hat das Sentiment von Finanznachrichten einen Einfluss auf Währungskurse — und wenn ja, wie viel?*
-
-Methodisch konkretisiert in eine **Lead/Lag-Frage**:
-
-- **Hypothese H1** (Sentiment führt): Sentiment am Tag $t$ sagt Returns am Tag $t+k$ vorher (für ein $k > 0$). Wenn negative News heute auftauchen, fällt der Kurs in den folgenden Tagen.
-- **Alternative A1** (gleichzeitig): Sentiment und Returns bewegen sich gemeinsam ($k = 0$), Sentiment ist Begleitinformation, kein Vorlauf.
-- **Alternative A2** (Markt führt): Returns laufen Sentiment voraus ($k < 0$), die News reagieren auf den Markt, nicht umgekehrt.
-
-Die Operationalisierung erfolgt im Notebook `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb`. Resultate stehen in Abschnitt 12.
-
-### Wie der Dozent das Projekt geframet hat
-
-Bewertet wird **nicht das Prognose-Modell**, sondern der Umgang mit unsauberen Daten: aus heterogenen Quellen vergleichbare Reihen bauen, Qualitätsprobleme erkennen und dokumentieren, Methodenentscheidungen begründen. Die Hypothesen-Antwort ist ein Anwendungsbeispiel; die Datenaufbereitung ist das eigentliche Produkt.
-
-Die Pflicht-Verarbeitungsschritte gemäss Vorgaben-Folie sind: **Datenbereinigung, Datentransformation, Qualitätsprüfung, Pipeline, Visualisierung, Analyse** — diese gliedern auch die Doku (Abschnitte 4–12).
-
-### Was das Projekt **nicht** ist
-
-- Kein Trading-System, kein Backtesting.
-- Kein Maschinelles-Lernen-Modell.
-- Keine Kausalaussage ("Sentiment verursacht Kursbewegung"), sondern eine deskriptive Beobachtung zeitlicher Vorhersagbarkeit. Granger-Causality oder ökonometrische Identifikation sind in Sektion 12 als Erweiterung vermerkt, aber nicht implementiert.
+> **Hinweis zum Lesen:** Dieses Dokument ist als **Protokoll** geschrieben. Es folgt der Reihe nach dem Weg der Daten — von der Quelle bis zur Antwort auf unsere Forschungsfrage — und begründet bei jedem Schritt, **warum** wir ihn so gemacht haben. Fachbegriffe und Abkürzungen werden beim ersten Auftreten ausgeschrieben.
 
 ---
 
-## 2. Datenquellen
+## Inhaltlicher roter Faden
 
-Es wurden bewusst **mehrere Quellen** pro Datentyp integriert, damit Unstimmigkeiten aufgedeckt werden können und die Abhängigkeit von einer einzelnen Quelle vermieden wird.
+Die Verarbeitung folgt sechs Pflichtschritten des Moduls. Jeder Schritt hat ein eigenes Kapitel:
 
-| Datentyp | Quelle | Zugang | Historie im Repo |
+1. **Daten laden** (Kapitel 4) — Rohdaten aus den Quellen holen und unverändert ablegen.
+2. **Datenbereinigung & Qualitätsprüfung** (Kapitel 5) — fehlende Werte, Duplikate, und ein Qualitätscheck, der einen echten Datierungsfehler aufdeckt.
+3. **Harmonisierung** (Kapitel 6) — die Quellen auf ein gemeinsames Format und denselben Markttag bringen.
+4. **Transformation & Feature Engineering** (Kapitel 7) — aus Rohdaten analysefähige Grössen bauen (Renditen, Tages-Sentiment, Aggregate).
+5. **Sentiment-Analyse** (Kapitel 8) — Stimmung aus Nachrichtentexten messen, auf drei Wegen zur Absicherung.
+6. **Analyse & Antwort** (Kapitel 9) — die Forschungsfrage mit einer Lead/Lag-Analyse beantworten.
+
+Kapitel 1–3 erklären Ziel, Quellen und Pipeline; Kapitel 10–15 behandeln Dashboard, Reproduzierbarkeit, Grenzen, Struktur und Entscheidungs-Chronologie.
+
+---
+
+## 1. Worum geht es? Ziel und Forschungsfrage
+
+### 1.1 Die Frage
+
+Das Projekt untersucht, ob die **Stimmung in Finanznachrichten** (das sogenannte *Sentiment*) einen erkennbaren Zusammenhang mit **Wechselkursen** hat — und falls ja, ob die Stimmung der Kursbewegung **vorausläuft**.
+
+> **Forschungsfrage:** *Hat das Sentiment von Finanznachrichten einen Einfluss auf Währungskurse — und wenn ja, mit welcher zeitlichen Verzögerung?*
+
+Wir konkretisieren die Frage in eine **Lead/Lag-Frage** (englisch *lead* = Vorlauf, *lag* = Nachlauf). Dazu vergleichen wir das Sentiment an einem Tag mit der Kursveränderung *k* Tage später:
+
+- **Hypothese H1 — Sentiment führt:** Das Sentiment am Tag *t* sagt die Kursveränderung am Tag *t + k* für ein *k > 0* vorher. Negative Nachrichten heute → fallender Kurs in den Folgetagen. (Das ist die Hypothese, die wir gerne bestätigt sähen.)
+- **Alternative A1 — gleichzeitig:** Sentiment und Kurs bewegen sich **am selben Tag** (*k = 0*). Das Sentiment ist dann eine Begleitinformation, kein Vorlauf.
+- **Alternative A2 — Markt führt:** Der Kurs bewegt sich zuerst, die Nachrichten reagieren nach (*k < 0*).
+
+Die Antwort steht in Kapitel 9.
+
+### 1.2 Wie der Dozent das Projekt rahmt
+
+Bewertet wird **nicht** ein Prognosemodell, sondern der **Umgang mit unsauberen Daten**: aus heterogenen Quellen vergleichbare Reihen bauen, Qualitätsprobleme erkennen und dokumentieren, und Methodenentscheidungen begründen. Die Antwort auf die Forschungsfrage ist ein Anwendungsbeispiel — das eigentliche Produkt ist die **Datenaufbereitung**.
+
+### 1.3 Was das Projekt *nicht* ist
+
+- Kein Handelssystem und kein Backtesting (rückwirkendes Durchtesten einer Handelsstrategie).
+- Kein Modell des maschinellen Lernens.
+- **Keine Kausalaussage.** Wir messen einen statistischen Zusammenhang über die Zeit, nicht „Sentiment *verursacht* Kursbewegung". Ein formaler Kausalitätstest (Granger-Test) ist als Erweiterung vermerkt, aber bewusst nicht Teil der Kernaussage (siehe Kapitel 9.6).
+
+---
+
+## 2. Die Datenquellen — woher kommen die Daten?
+
+Wir integrieren **bewusst mehrere Quellen pro Datentyp**. Grund: Nur mit mehreren Quellen lassen sich Unstimmigkeiten überhaupt aufdecken (eine einzelne Quelle kann man nicht gegenprüfen), und man wird nicht von einem Anbieter abhängig. Genau dieser Cross-Check hat in diesem Projekt einen echten Datenfehler sichtbar gemacht (Kapitel 5.3).
+
+| Datentyp | Quelle | Zugang | Historie im Projekt |
 |---|---|---|---|
-| Forex | Yahoo Finance | `yfinance` (ohne Auth) | 2022-01-03 – 2026-04-21 |
-| Forex | EODHD | REST-API mit API-Key | 2022-01-02 – 2026-04-22 |
-| Forex | MetaTrader 5 | Manuelle CSV-Exporte (Daily + M15) | 2022-01-03 – 2025-12-26 |
-| News | EODHD | REST-API, Tagesfeld, vorberechnete Polarity | 2022-01 – 2026-04 |
-| News | RSS-Feeds (ForexLive, FXStreet, Yahoo Finance, Google News, DailyFX) | `requests` + `feedparser` | Scrape-Schnappschüsse von 2024-09 bis 2026-04 |
-| News | Reddit (r/Forex, r/investing, r/economics) | JSON-Endpunkt | Gleiches Fenster wie RSS |
-| Öl | Yahoo Finance (WTI `CL=F`, Brent `BZ=F`) | `yfinance` | 2022-01-03 – 2026-04-21 |
+| Wechselkurs | Yahoo Finance | Python-Bibliothek `yfinance` (kein Login nötig) | 2022-01-03 – 2026-04-21 |
+| Wechselkurs | EODHD | REST-Programmierschnittstelle (API) mit Schlüssel | 2022-01-02 – 2026-04-22 |
+| Wechselkurs | MetaTrader 5 | Manuelle CSV-Exporte (Tages- und 15-Minuten-Daten) | 2022-01-03 – 2025-12-26 |
+| Nachrichten | EODHD | REST-API, mit bereits berechnetem Sentiment-Wert | 2022-01 – 2026-04 |
+| Nachrichten | RSS-Feeds (ForexLive, FXStreet, Yahoo Finance, Google News, DailyFX) | `requests` + `feedparser` | Scrape-Momentaufnahmen 2024-09 / ab 2025-09 |
+| Nachrichten | Reddit (r/Forex, r/investing, r/economics) | öffentlicher JSON-Endpunkt | gleiches Fenster wie RSS |
+| Ölpreis | Yahoo Finance (WTI `CL=F`, Brent `BZ=F`) | `yfinance` | 2022-01-03 – 2026-04-21 |
 
-### Warum diese Kombination?
+**Begriffe:**
+- **Forex** = *Foreign Exchange*, der Devisenmarkt (Handel mit Währungen).
+- **EODHD** = *End-of-Day Historical Data*, ein kommerzieller Finanzdaten-Anbieter.
+- **REST-API** = *Representational State Transfer – Application Programming Interface*, eine Programmierschnittstelle, die Daten über Web-Adressen (URLs) ausliefert.
+- **RSS** = *Really Simple Syndication*, ein standardisiertes Nachrichten-Feed-Format.
+- **WTI / Brent** = zwei weltweite Referenz-Rohölsorten (West Texas Intermediate bzw. Brent).
 
-- **Yahoo + EODHD** — zwei unabhängige, öffentlich zugängliche Forex-Anbieter. Yahoo ist kostenlos, EODHD liefert zusätzlich Sonntagsdaten (globaler Forex öffnet Sonntag abends in Asien) und bringt das Nachrichten-Feed plus bereits aggregierte Sentiment-Werte. So sind Datenvergleich und Cross-Check möglich.
-- **MetaTrader 5** — Broker-nahe Daten, die als „Ground Truth" für eine technische Sicht dienen. Werden hier nur für den **Quellenvergleich** (siehe Abschnitt 5.1) genutzt, nicht für die Sentiment-Korrelation, weil MT5-Daten nur lokal exportiert werden können und bis 2025-12-26 reichen.
-- **EODHD-News** — fertig annotiert mit Polarity pro Artikel → schneller Einstieg und Referenz für eine eigene Sentiment-Analyse.
-- **RSS + Reddit** — zweite, unabhängige Nachrichtenquelle für den Proof-of-Concept (siehe Abschnitt 8). Rohe Texte, keine vorberechneten Scores.
-- **Öl (WTI + Brent)** — häufig genannter makroökonomischer Einflussfaktor auf Rohstoff- und Petro-Währungen. Dient im Dashboard als Overlay.
+### 2.1 Warum diese Kombination?
+
+- **Yahoo Finance + EODHD** — zwei unabhängige, öffentlich zugängliche Wechselkurs-Anbieter. Yahoo ist kostenlos; EODHD liefert zusätzlich Sonntagsdaten (der globale Devisenmarkt öffnet Sonntagabend in Asien) und bringt das Nachrichten-Feed inklusive vorberechneter Sentiment-Werte mit. So sind Datenvergleich und Cross-Check möglich.
+- **MetaTrader 5** — Daten aus einer brokernahen Handelsplattform, die als technische Referenz dienen. Werden hier nur für den **Quellenvergleich** (Kapitel 5.3) genutzt, weil sie nur lokal exportierbar sind und der Export bis 2025-12-26 reicht.
+- **EODHD-Nachrichten** — bereits mit einem Sentiment-Wert pro Artikel versehen → schneller Einstieg und eine Referenz für unsere eigene Sentiment-Berechnung.
+- **RSS + Reddit** — eine zweite, unabhängige Nachrichtenquelle als Machbarkeitsnachweis (englisch *Proof of Concept*, Kapitel 8.3). Rohe Texte ohne vorberechnete Werte.
+- **Öl (WTI + Brent)** — ein häufig genannter makroökonomischer Einflussfaktor auf Rohstoff- und Petrowährungen. Dient im Dashboard als zuschaltbare Vergleichsreihe.
 
 ---
 
-## 3. Architektur der Datenpipeline
+## 3. Die Pipeline im Überblick
 
-```
-┌──────────────┐   Loader   ┌────────────┐   Notebooks/   ┌────────────┐   Dashboard
-│ externe APIs │ ─────────▶ │ data/raw/  │ ─ scripts/ ──▶ │data/process│ ───────────▶ Streamlit
-│ (Yahoo, …)   │            │            │                │   ed/      │
-└──────────────┘            └────────────┘                └────────────┘
-```
-
-Drei Schichten:
-
-1. **`data/raw/`** — unveränderte Rohdaten. Jede Datei ist durch Quelle + Datum im Dateinamen identifizierbar. Keine Veränderung nach dem Laden.
-2. **`data/processed/`** — harmonisierte, zusammengeführte Zwischenergebnisse. Produziert durch die Notebooks oder die Helper-Scripts in `scripts/`.
-3. **`data/final/`** — fertige End-Datensätze, die in Bericht oder Dashboard einfließen.
-
-**Reproduzierbarkeit:** Jeder Schritt kann mit einem einzigen Befehl neu ausgeführt werden. Siehe Abschnitt 13.
-
-**Visualisierung:** Das Pipeline-Diagramm ist als Graphviz-Quelle in `docs/architektur/pipeline.gv` abgelegt; gerenderte Versionen liegen als `pipeline.png` und `pipeline.svg` daneben.
+Die Daten durchlaufen drei klar getrennte Schichten. Diese Trennung ist das Rückgrat der Reproduzierbarkeit:
 
 ![Pipeline-Diagramm](docs/architektur/pipeline.png)
 
-Im Dashboard ist dasselbe Diagramm interaktiv unter der Seite "Workflow" erreichbar. Render-Anleitung für eigene Anpassungen steht in `docs/architektur/README.md`.
+1. **`data/raw/`** — die **unveränderten Rohdaten**, genau so, wie sie aus den Quellen kommen. Jede Datei trägt Quelle und Datum im Dateinamen. Nach dem Laden wird hier nichts mehr verändert. Diese Schicht ist unsere „Ground Truth": Wenn ein späterer Schritt fragwürdig ist, können wir immer auf das Original zurück.
+2. **`data/processed/`** — die **bereinigten, harmonisierten und zusammengeführten** Zwischenergebnisse. Erzeugt durch die Skripte in `scripts/` (oder die zugehörigen Notebooks).
+3. **`data/final/`** — fertige Datensätze, die direkt in Bericht oder Dashboard einfliessen.
+
+**Reproduzierbarkeit:** Jeder Schritt lässt sich mit einem einzigen Befehl neu ausführen (Kapitel 11). Die Skripte sind *idempotent* — mehrfaches Ausführen führt zum selben Ergebnis.
+
+Das Pipeline-Diagramm liegt als Graphviz-Quelle (`docs/architektur/pipeline.gv`) sowie als PNG und SVG vor und ist im Dashboard unter der Seite „Workflow" interaktiv erreichbar.
 
 ---
 
-## 4. Umgang mit fehlenden Werten
+## 4. Schritt 1 — Laden der Rohdaten
 
-Der Umgang wurde für jeden Datentyp separat entschieden. Generelles Prinzip: **nur dort interpolieren, wo die Lücke technisch entsteht und nicht inhaltlich ist**.
+Jede Quelle hat ein eigenes Lade-Skript (`src/data_loading/`). Alle folgen demselben Muster: Daten holen → unverändert nach `data/raw/` schreiben. Bewusst findet hier **keine** Bereinigung statt — das gehört in den nächsten Schritt, damit das Rohmaterial erhalten bleibt.
 
-### 4.1 Forex: Wochenenden und Feiertage
-
-- **Samstage:** Fehlen bei allen Quellen, weil der Forex-Markt weltweit geschlossen ist. → nicht ausgefüllt, ist erwartet.
-- **Sonntage:** EODHD liefert Werte (Markteröffnung Asien ab Sonntagabend UTC), Yahoo und MT5 nicht. → Sonntagsdaten werden **behalten**, wo vorhanden. Sie gehen als normaler Tag in Zeitreihen ein, weil sie reale Marktdaten sind.
-- **Feiertage (z.B. 1. Januar, Karfreitag):** In Yahoo fehlend, in EODHD teilweise vorhanden. → **nicht interpoliert**, weil das den Markt zu diesem Zeitpunkt nicht repräsentiert. In der kombinierten Tabelle wird per `has_gap`-Flag markiert, dass eine Quelle fehlt.
-- **Interpolation als Dashboard-Option:** Im Dashboard gibt es einen Schalter „Fehlende Tage interpolieren (linear, vor Aggregation)". Dieser wirkt **ausschließlich auf Forex- und Öl-Reihen**, niemals auf Sentiment. Außerdem wirkt er nur auf die Anzeige, schreibt keine Werte zurück. So bleibt die Rohdaten-Integrität gewahrt und der User sieht, wo der Effekt auftritt.
-
-### 4.2 News-Sentiment: Tage ohne Artikel
-
-- Wenn an einem Tag **kein Artikel** in EODHD oder im Webscraping-Pool vorliegt (typisch: Wochenenden, Feiertage, thin-news-Tage), bleibt die Sentiment-Zeitreihe **NaN**.
-- **Kein Interpolieren — nirgends.** Weder im Rohdatenlayer noch im Processing, noch im Dashboard. Selbst wenn der User im Dashboard die Interpolations-Checkbox aktiviert, werden Sentiment-Reihen explizit ausgenommen.
-- **Begründung methodisch (MNAR):** Die Vorlesung W2 (`slides/Folien.pdf`, S. 11) unterscheidet MCAR / MAR / MNAR. Tage ohne Artikel sind hier **MNAR**: ob ein Artikel existiert, hängt direkt davon ab, ob etwas passiert ist — also vom *fehlenden Wert selbst*. Imputation bei MNAR erzeugt strukturelle Verzerrung, weil "kein Artikel" inhaltlich **nicht** "neutraler Artikel" bedeutet. Eine Null-Imputation oder Zeit-Interpolation würde eine Nachrichtenlage vortäuschen, die es nicht gab.
-- Die Slides empfehlen für Zeitreihen zwar grundsätzlich "vorherige oder zukünftige Werte zum Auffüllen" (W2, S. 16) — wir weichen für Sentiment **bewusst** davon ab, weil die Auffüll-Logik dort für stetige physikalische Grössen gedacht ist, nicht für ereignisbedingte Zähldaten.
-- Bei der Aggregation auf Wochen/Monate ignoriert pandas NaN automatisch (`skipna=True`), d.h. Wochen mit 2 statt 5 News-Tagen werden weiterhin aggregierbar, nur eben auf Basis der vorhandenen Tage.
-
-### 4.3 Öl-Daten
-
-- Auch hier: Feiertage und Wochenenden fehlen, werden behalten als Marktereignisse. Keine Interpolation im Rohdatenlayer.
-
-### 4.4 Sonderfall EUR/CHF-News
-
-- Die EODHD-News-Abdeckung für EUR/CHF ist **extrem dünn** (ca. 13 Artikel im gesamten Zeitraum). Das liegt an der geringeren internationalen Medienaufmerksamkeit für dieses Paar.
-- Keine Füllung möglich — und sinnvoll. Wir dokumentieren es offen und führen für EUR/CHF keine Sentiment-Korrelation durch, nur Forex-Quellenvergleich und Ölkontext. Im Bericht wird diese Einschränkung explizit genannt.
-
----
-
-## 5. Umgang mit Duplikaten
-
-### 5.1 Forex
-
-- **Duplikate im Datumsindex** werden je Quelle mit `df[~df.index.duplicated(keep="first")]` entfernt. Ursache sind meist Zeitzonen-bedingte Mehrfacheinträge (z.B. Yahoo liefert EUR/USD mit 23:00-UTC-Zeitstempel, der durch das Runden auf den nächsten Tag kollidiert).
-- **Inhaltliche Duplikate** (exakt gleiche OHLC-Werte an unterschiedlichen Tagen) werden *nicht* entfernt — sie können durch ruhige Marktphasen legitim entstehen, und ein automatisches Entfernen wäre gefährlich.
-
-### 5.2 News
-
-- **Webscraping:** Artikel erscheinen mehrfach in aufeinanderfolgenden Scrape-Schnappschüssen, solange sie im Feed stehen. Deduplikation erfolgt auf `link` (eindeutige URL) mit `drop_duplicates(subset="link", keep="first")`. Das ist robust, weil derselbe Artikel nicht mit unterschiedlichem Text existiert.
-- **Nicht auf `title` dedupliziert**, weil RSS-Feeds denselben Artikel mit leicht unterschiedlich formatiertem Titel ausspielen können (z.B. mit/ohne Quellen-Suffix).
-- **EODHD-News:** Die API liefert pro Artikel eine einzigartige Paginierung, echte Duplikate sind selten. Beobachtet: 0 Duplikate bei EUR/CHF, kleine Anzahl bei EUR/USD/GBP — werden über denselben Mechanismus entfernt.
-
-### 5.3 Reddit-Spezifität
-
-- Reddit-Posts können in `hot` und `new` gleichzeitig auftauchen. Der Loader erkennt das und entfernt die Duplikate direkt nach dem Scrape (Spalte `link`).
-
----
-
-## 6. Datenharmonisierung
-
-Ziel: Alle Quellen mit demselben Schema ansprechbar machen, damit ein Vergleich möglich ist.
-
-**Theorie-Bezug (W4, `slides/W04_dwae.pdf`, S. 8):** Die Vorlesung unterscheidet drei Dimensionen der Heterogenität, an denen wir uns hier explizit ausrichten:
-
-1. **Syntax** — unterschiedliche Datenformate (CSV, JSON, HTML, Tab-getrennt für MT5).
-2. **Struktur** — unterschiedliche Schemas (Spaltenreihenfolgen, geschachtelte Dicts vs. flach).
-3. **Semantik** — gleiche Begriffe, unterschiedliche Bedeutungen (z. B. "close" als New-York-Schluss vs. London-Schluss).
-
-| Dimension (W4) | Ausgangslage | Harmonisierung |
+| Quelle | Skript | Wie genau geladen wird |
 |---|---|---|
-| **Syntax — Zeitzone** | Yahoo UTC, EODHD naive lokal, MT5 Broker-TZ, RSS/Reddit je nach Feed | Alle auf timezone-naive normalisiert, auf Tagesebene gerundet (`.normalize()` oder `.ceil("D")` je nach Quelle) |
-| **Struktur — Spaltennamen** | `Open/High/Low/Close` (Yahoo), `open/high/low/close` (EODHD), `<OPEN>/<HIGH>/…` (MT5) | Alle auf lowercase `open/high/low/close` |
-| **Syntax — Datumsformat** | ISO-Strings, YYYY.MM.DD (MT5), Epoch-Sekunden (Reddit) | In `pd.Timestamp` via `pd.to_datetime(..., errors="coerce")` |
-| **Semantik — Währungspaar-Schreibweise** | `EURUSD=X` (Yahoo), `EURUSD.FOREX` (EODHD), `EURUSD` (MT5) | Intern einheitlich `EUR_USD`, `EUR_CHF`, `GBP_USD` |
-| **Struktur — News-Felder** | Sentiment als verschachteltes Dict (EODHD) vs. kein Sentiment (RSS) | `pd.json_normalize()` flattet das EODHD-Dict zu `polarity`, `neg`, `neu`, `pos` |
+| Yahoo-Wechselkurse | `yahoo_loader.py` | `yfinance` lädt die Symbole `EURUSD=X`, `EURCHF=X`, `GBPUSD=X` als Tages-Kerzen. Kein Login. |
+| EODHD-Wechselkurse | `eodhd_loader.py` | REST-Aufruf `https://eodhd.com/api/eod/{Symbol}` mit `period=d` (täglich); Symbole `EURUSD.FOREX` usw. API-Schlüssel aus `.env`. |
+| EODHD-Nachrichten | `eodhd_news_loader.py` | REST-Aufruf `https://eodhd.com/api/news`; Blätter-Logik (*Pagination*) mit `limit=1000`, um die Zahl der Aufrufe klein zu halten. Speichert Roh-JSON **und** verarbeitetes CSV. |
+| Webscraping | `webscraping_loader.py` | RSS-Feeds und Reddit-JSON. Holt den Inhalt zuerst mit `requests`, übergibt den Text dann an `feedparser` (siehe SSL-Hinweis unten). |
+| Ölpreise | `oil_loader.py` | `yfinance` lädt `CL=F` (WTI) und `BZ=F` (Brent) als Tagesdaten. |
 
-W4 (S. 13) kategorisiert die Harmonisierung als **retrospektiv** — sie passiert *nach* der Datenerhebung, weil wir keine Kontrolle über die Quellsysteme haben. Das ist gemäss Slide "die häufigste Form in der Praxis", limitiert aber die erreichbare Datenqualität (S. 15: Trade-offs zwischen Validität, Reliabilität, Abdeckung, Granularität).
+**Begriffe:**
+- **OHLC** = *Open, High, Low, Close* — Eröffnungs-, Höchst-, Tiefst- und Schlusskurs eines Tages (eine „Kerze").
+- **JSON** = *JavaScript Object Notation*, ein verschachteltes Textformat; **CSV** = *Comma-Separated Values*, eine flache Tabelle.
 
-Der harmonisierte Forex-Output liegt in `data/processed/forex/forex_alle_quellen_kombiniert.csv`: Ein Long-Format, in dem jede Zeile eine Paar-Datum-Kombination ist und Spalten wie `yahoo_close`, `eodhd_close`, `metatrader_close` nebeneinander stehen. Zusätzlich: `weekday`, `is_weekend`, `n_sources`, `has_gap` für spätere Filter.
+**Wichtige Lade-Details, die später relevant werden:**
+- Die EODHD-Nachrichten kommen mit einem verschachtelten Sentiment-Objekt. Der Loader flacht es mit `pandas.json_normalize()` in eigene Spalten auf (`polarity`, `neg`, `neu`, `pos`). Artikel ohne Sentiment behalten den fehlenden Wert (`NaN`, siehe Kapitel 5.1) — sie werden **nicht** gelöscht.
+- Beim Webscraping trat auf macOS ein Zertifikatsfehler auf (`feedparser.parse(url)` schlug mit SSL-Fehler fehl). Lösung: den Feed-Inhalt erst mit `requests` (das die Zertifikate von `certifi` nutzt) holen und den Text an `feedparser.parse(text)` geben. Dieser Befund ist ein typisches Beispiel für den iterativen Umgang mit Datenquellen: **erkannt → Ursache benannt → behoben → dokumentiert.**
 
----
-
-## 7. Datentransformation & Feature Engineering
-
-### 7.1 Aggregation auf Tagesebene (News)
-
-- Tagesbasis = erste sinnvolle gemeinsame Auflösung mit Forex-Daten.
-- Aggregation der Polarity über alle Artikel eines Tages: **Median** statt Mittel.
-- **Begründung mit Slides-Bezug (W3, `slides/Folien 2.pdf`, S. 19/25):** Die Vorlesung empfiehlt für ausreisser-anfällige Daten den `RobustScaler`, der genau die Kombination Median + IQR verwendet — mit der Begründung "Ausreisser beeinflussen Median & IQR kaum → robustere Skalierung". Wir wenden dieselbe Logik auf die Tages-Aggregation der Polarity an: Ein einzelner Artikel mit extremer Polarity (±1.0) kann den Tagesmittelwert stark verziehen, der Median bleibt davon unbeeinflusst.
-- **Quantitatives Bild der Verteilung:** Die Polarity-Werte sind nicht normalverteilt, sondern haben starke Konzentrationen bei 0 (TextBlob-Default für Texte ohne Lexikon-Treffer) und vereinzelte Extremwerte. Bei dieser Verteilungsform ist der Median fast immer aussagekräftiger als das Mittel.
-
-### 7.2 Aggregation auf Wochen/Monate/Quartale
-
-- Im Dashboard (Master Grafik 1 und 2) zur Wahl. Über `pd.DataFrame.resample` mit konfigurierbarer Aggregationsfunktion (Mittel, Median, Letzter, Min, Max, Summe).
-- Fehlende Tage werden **nicht vorher gefüllt**; `resample` ignoriert NaN automatisch.
-- Wochen beginnen Montag (`W-MON`), Monate/Quartale am Monatsanfang (`MS`, `QS`).
-
-### 7.3 Normalisierung (Index=100)
-
-- Dashboard-Feature, keine Rohdaten-Veränderung.
-- Teilt jede Reihe durch ihren ersten gültigen Wert im Zeitraum und multipliziert mit 100. Dadurch werden Reihen mit sehr unterschiedlichen Skalen (Forex 1.15, Öl 80, Sentiment 0.1) optisch vergleichbar.
-
-### 7.4 Forex-Mittelwert aus Yahoo+EODHD
-
-- Im Dashboard per Dropdown wählbar („mittelwert" vs. einzelne Quelle).
-- Mittelwert nur dort gebildet, wo **beide** Quellen Daten haben (`skipna=False`), damit kein Bias durch einseitige Tage entsteht.
-
-### 7.5 MetaTrader M15 → Daily
-
-- Die 15-Minuten-Bars werden im Forex-EDA-Notebook auf Tagesbasis aggregiert (`Open=first`, `High=max`, `Low=min`, `Close=last`). Validierungscheck: Die aggregierten Werte müssen mit dem separat gelieferten MT5-Daily-Export exakt übereinstimmen (100% Match in allen OHLC-Feldern). Dient als Sanity-Check für die Aggregationslogik.
+Der Reihenfolge-Befehl zum Neuladen steht in Kapitel 11. **Achtung:** EODHD hat im kostenlosen Tarif ein Tageslimit (20 Aufrufe pro Tag, Nachrichten zählen 5 pro Symbol). Lade-Skripte deshalb nur bewusst ausführen.
 
 ---
 
-## 8. Sentiment-Analyse: drei parallele Wege
+## 5. Schritt 2 — Datenbereinigung und Qualitätsprüfung
 
-Wir berechnen Sentiment auf **drei unterschiedliche Arten**, damit Methodenabhängigkeiten sichtbar werden.
+Dieser Schritt entscheidet, welche Lücken wir füllen, welche wir bewusst offen lassen, welche Duplikate wir entfernen — und er enthält den wichtigsten Qualitätsbefund des Projekts (Kapitel 5.3).
 
-### 8.1 EODHD-Polarity (vorberechnet)
+### 5.1 Umgang mit fehlenden Werten
 
-- EODHD liefert pro Nachrichtenartikel bereits eine Polarity-Zahl in `[-1, 1]` plus separate Scores für negativ, neutral, positiv.
-- Methode nicht öffentlich dokumentiert, wir behandeln sie als Black-Box-Quelle.
-- Einsatz: Master Grafik 1 (saubere Methodik-Referenz).
+Leitprinzip: **Nur dort auffüllen, wo die Lücke rein technisch entsteht — nicht dort, wo das Fehlen selbst eine Information ist.**
 
-### 8.2 Eigene TextBlob-Analyse auf EODHD-Text
+Ein fehlender Wert heisst in der Tabellen-Bibliothek `pandas` **`NaN`** (*Not a Number*).
 
-- Wir nehmen **denselben** Artikeltext (Titel + Content) und lassen `textblob.TextBlob(text).sentiment.polarity` darüber laufen.
-- Ergebnis wird mit der EODHD-Polarity verglichen (Notebook `sentiment_analyse_vergleich.ipynb`, Dashboard-Seite „Sentiment-Vergleich").
-- Zweck: Ist die EODHD-Polarity ein mehr-oder-weniger-komplexes Modell? Wie nah kommt ein simples lexikonbasiertes Verfahren?
+**Wechselkurse — Wochenenden und Feiertage:**
+- **Samstag:** fehlt bei allen Quellen, weil der Devisenmarkt weltweit geschlossen ist. → nicht auffüllen, das ist erwartet.
+- **Sonntag:** EODHD liefert Werte (Marktöffnung in Asien ab Sonntagabend), Yahoo und MetaTrader nicht. → vorhandene Sonntagswerte **behalten**, weil sie reale Marktdaten sind.
+- **Feiertage** (z. B. Neujahr, Karfreitag): teils fehlend. → **nicht** interpoliert (rechnerisch aufgefüllt), weil der Markt an diesem Tag den Wert nicht hergegeben hat. In der kombinierten Tabelle markiert die Spalte `has_gap`, dass an einem Tag eine Quelle fehlt.
 
-### 8.3 Eigene TextBlob-Analyse auf Webscraping-Text
+**Warum keine pauschale Interpolation der Kurse?** *Interpolation* heisst, fehlende Werte aus den Nachbarwerten zu schätzen (z. B. linear). Für Kurse wäre das ein erfundener Handelstag. Wir bieten Interpolation deshalb nur als **Anzeige-Option im Dashboard** an (Kapitel 7.4), die nichts in die Rohdaten zurückschreibt.
 
-- Titel + Summary der gescrapten RSS/Reddit-Artikel gehen in TextBlob.
-- Tagesmedian über alle Artikel, gleiche Aggregationsregel wie in 7.1.
-- Einsatz: Master Grafik 2 (Proof of Concept mit unabhängiger Nachrichtenquelle).
+**Nachrichten-Sentiment — Tage ohne Artikel:**
+- Liegt an einem Tag **kein Artikel** vor (typisch an Wochenenden, Feiertagen, nachrichtenarmen Tagen), bleibt das Sentiment **`NaN`** — und wird **nirgends** aufgefüllt.
+- **Begründung (Theorie-Bezug):** Die Vorlesung Woche 2 unterscheidet drei Arten fehlender Werte:
+  - **MCAR** (*Missing Completely At Random*) — rein zufällig fehlend.
+  - **MAR** (*Missing At Random*) — fehlend abhängig von *anderen* beobachteten Werten.
+  - **MNAR** (*Missing Not At Random*) — fehlend abhängig vom *fehlenden Wert selbst*.
 
-### 8.4 Methodische Hinweise zu TextBlob
+  Tage ohne Artikel sind **MNAR**: Ob ein Artikel existiert, hängt direkt davon ab, ob etwas berichtenswert passiert ist. „Kein Artikel" bedeutet inhaltlich **nicht** „neutraler Tag mit Sentiment 0". Würde man die Lücke mit 0 oder mit dem Nachbarwert füllen, täuschte man eine Nachrichtenlage vor, die es nicht gab — eine strukturelle Verzerrung. Deshalb: bewusst `NaN` lassen.
+- Bei der Aggregation auf Wochen/Monate ignoriert `pandas` `NaN` automatisch, d. h. eine Woche mit nur 2 statt 5 Nachrichtentagen wird trotzdem aggregiert — eben auf Basis der vorhandenen Tage.
 
-- TextBlob ist **lexikonbasiert**, vergleichsweise einfach, und liefert für **finanzspezifische** Texte regelmäßig `polarity = 0` (ca. ein Drittel der Artikel). Das ist eine bekannte Schwäche: Finanz-Fachbegriffe sind im zugrundeliegenden Lexikon schwach vertreten.
-- Entscheidung, **TextBlob trotzdem** einzusetzen: Transparent, nachvollziehbar, reproduzierbar. Für einen Bildungskontext wichtiger als eine (leistungsstärkere, aber intransparente) Transformer-Modell-Lösung.
+**Sonderfall EUR/CHF-Nachrichten:** Die EODHD-Nachrichten-Abdeckung für EUR/CHF ist **extrem dünn** (rund 13 Artikel im gesamten Zeitraum), weil dieses Paar international wenig Medienaufmerksamkeit bekommt. Wir führen für EUR/CHF deshalb **keine** belastbare Sentiment-Korrelation durch und sagen das im Bericht offen.
 
----
+### 5.2 Umgang mit Duplikaten
 
-## 9. Der „saubere Weg" — Master Grafik 1
+**Wechselkurse:** Doppelte Datums-Einträge je Quelle entfernen wir mit „erstes behalten" (`keep="first"`). Ursache sind meist zeitzonenbedingte Mehrfacheinträge. **Inhaltliche** Duplikate (zufällig gleiche OHLC-Werte an verschiedenen Tagen) entfernen wir **nicht** — die können in ruhigen Marktphasen echt sein.
 
-Komponenten des sauberen Wegs (im Dashboard: Seite **Master Grafik**):
+**Nachrichten (Webscraping):** Derselbe Artikel taucht in aufeinanderfolgenden Scrape-Momentaufnahmen mehrfach auf. Wir deduplizieren auf der eindeutigen Adresse (`link`), nicht auf dem Titel — denn RSS-Feeds liefern denselben Artikel manchmal mit leicht abweichendem Titel.
 
-| Baustein | Quelle |
-|---|---|
-| Forex-Kurs | Yahoo ∪ EODHD (Mittel oder einzeln) |
-| News-Sentiment | EODHD Polarity, Tagesmedian |
-| Öl-Overlay | Yahoo WTI und/oder Brent |
+**Reddit:** Ein Beitrag kann gleichzeitig in „hot" und „new" stehen. Der Loader entfernt solche Doppel direkt nach dem Scrapen (über `link`).
 
-**Vorgehen:**
+### 5.3 Qualitätsprüfung über Quellen hinweg — der zentrale Befund
 
-1. Forex-Rohdaten werden kombiniert (`forex_alle_quellen_kombiniert.csv`) — liegt als reproduzierbarer Schritt in `scripts/regenerate_forex_combined.py`.
-2. EODHD-News werden je Paar nach kanonischem FX-Symbol (`EURUSD.FOREX` etc.) gefiltert, Polarity auf Tagesmedian aggregiert.
-3. Dashboard plottet frei kombinierbar mit separaten Y-Achsen je Kategorie (Forex / Öl / Sentiment).
+Mehrere Quellen sind nur dann ein Gewinn, wenn man sie **gegeneinander prüft**. Wir haben einen einfachen, aber wirkungsvollen Test gemacht:
 
-**Stärke:** Saubere, lange Zeitreihe mit guter Artikelabdeckung für EUR/USD und GBP/USD.
-**Schwäche:** Ein-Quellen-Abhängigkeit beim Sentiment (nur EODHD). Die EODHD-Polarity ist ein Black Box.
+> **Sanity-Check:** Zwei Anbieter desselben Wechselkurses müssen sich auf **Tagesrenditen** fast perfekt ähneln (Korrelation nahe 1.0). Tun sie das nicht, stimmt etwas mit der Ausrichtung oder den Werten nicht.
 
----
+Das Ergebnis war alarmierend:
 
-## 10. Der „Proof of Concept" — Master Grafik 2
-
-Exakt dieselbe Visualisierung wie Master Grafik 1, aber:
-
-| Baustein | Sauberer Weg | PoC |
+| Paar | Tagesrendite-Korrelation Yahoo ↔ EODHD (gleicher Tag) | mittlere Tagesdifferenz |
 |---|---|---|
-| Forex | Yahoo + EODHD | Yahoo + EODHD (identisch) |
-| Öl | Yahoo | Yahoo (identisch) |
-| **Sentiment** | **EODHD Polarity** | **TextBlob auf Webscraping-Text** |
+| EUR/CHF | **0.92** (in Ordnung) | ~2 Pips |
+| EUR/USD | **0.03** (kaputt) | ~42 Pips |
+| GBP/USD | **0.03** (kaputt) | ~50 Pips |
 
-**Warum der PoC existiert:** Falls der im sauberen Weg gefundene Zusammenhang nur durch die spezifische EODHD-Sentiment-Methode entsteht, wäre die Schlussfolgerung wacklig. Wenn derselbe Zusammenhang auch mit einem anderen Text-Korpus und einer anderen Sentiment-Methode sichtbar ist → robuster.
+Ein *Pip* ist die kleinste übliche Kursbewegung (vierte Nachkommastelle). Zwei echte EUR/USD-Feeds dürften sich am selben Tag niemals um 42 Pips unterscheiden und müssten auf Renditen ~0.99 korrelieren — nicht 0.03.
 
-**Einschränkungen des PoC:**
+**Diagnose:** Verschiebt man die EODHD-Reihe um **genau einen Kalendertag**, springt die Korrelation auf 0.66–0.99. Das heisst: Die EODHD-Tagesreihen waren für EUR/USD und GBP/USD **um einen Tag gegenüber Yahoo verschoben** (für EUR/CHF nicht).
 
-- Webscraping-Feeds liefern nur die aktuell im Feed sichtbaren Artikel. Historische Abdeckung ist durch die Scrape-Zeitpunkte begrenzt. In unserem Fall reichen die kombinierten Scrapes aber bis **September 2024** zurück, weil RSS-Feeds oft mehrere hundert Artikel zurückhalten.
-- Mischung aus Nachrichten (RSS) und Meinungsbeiträgen (Reddit) beeinflusst die Polarity-Verteilung.
-- TextBlob liefert häufig Null-Werte (neutral) bei finanzspezifischem Vokabular.
+**Ursache:** Zwei Konventionsunterschiede treffen zusammen:
+1. **Yahoo** stempelt seine Tagesbalken gemischt auf `23:00` oder `00:00` UTC (*Coordinated Universal Time*, die koordinierte Weltzeit). Das ist ein bekanntes Sommerzeit-Artefakt der `yfinance`-Bibliothek: derselbe Handelstag erscheint mal als „Sonntag 23:00", mal als „Montag 00:00".
+2. **EODHD** führt den Sonntags-Eröffnungsbalken und labelt ihn je nach Paar anders.
 
-**Ausführbare Pipeline:** `scripts/regenerate_webscraping_sentiment.py`
+In Summe ist die EODHD-Reihe bei zwei Paaren um einen Tag versetzt.
+
+**Warum das gefährlich war:** Unsere Analyse mittelt die Quellen pro Tag (Kapitel 7.3). Mittelt man zwei um einen Tag versetzte Reihen, mischt man **zwei verschiedene Markttage** zu einem Wert — die resultierenden Renditen sind teils Unsinn. Genau auf diesen Renditen beruht aber die Lead/Lag-Analyse.
+
+**Wichtige Einordnung (Niveau der Differenz):** Dass sich Quellen *etwas* unterscheiden, ist bei Forex **normal und erwartet** — der Devisenmarkt ist dezentral (*over-the-counter*), es gibt keinen einen „offiziellen" Kurs; jeder Handelsplatz quotiert minimal anders. Genau dafür ist ein **Mittelwert** das richtige Werkzeug. Der Punkt ist die **Grössenordnung**: EUR/CHF unterscheidet sich um ~2 Pips (echte Anbieter-Streuung), EUR/USD aber um ~42 Pips — das **20-Fache**. So weit driften zwei echte Feeds nicht auseinander; das war ein **Datierungsfehler**, kein Anbieterrauschen. Nach Ausrichtung schrumpft die Differenz auf ~12 bzw. ~1 Pip — also auf dasselbe kleine Niveau wie EUR/CHF.
+
+**Die Behebung (Kapitel 6.2):** Wir richten jede Nicht-Yahoo-Quelle **datengetrieben** an Yahoo aus (wir wählen den Versatz, der die Rendite-Korrelation maximiert), **bevor** wir mitteln. Der Mittelwert bleibt also unser Werkzeug — er wird nur auf korrekt ausgerichtete Reihen angewandt. Als Nebenbefund war auch MetaTrader bei EUR/USD um einen Tag versetzt; nach Ausrichtung korreliert es mit 0.98 zu Yahoo (starke gegenseitige Bestätigung).
+
+> **Lehrwert:** Dieser Befund ist das Herzstück unserer Qualitätsprüfung. Erst der Cross-Check zwischen Quellen hat einen Fehler sichtbar gemacht, den keine einzelne Quelle je gezeigt hätte. Genau dafür haben wir mehrere Quellen integriert.
 
 ---
 
-## 11. Dashboard
+## 6. Schritt 3 — Harmonisierung
 
-Streamlit-App (`dashboard.py`). Aktuelle Seiten:
+Ziel: Alle Quellen so aufbereiten, dass sie **dasselbe Schema** und **denselben Markttag** sprechen, damit ein Vergleich überhaupt möglich ist.
+
+### 6.1 Die drei Dimensionen der Heterogenität
+
+Die Vorlesung Woche 4 unterscheidet drei Ebenen, an denen sich Quellen unterscheiden. Wir richten uns explizit daran aus:
+
+| Dimension | Ausgangslage | Unsere Harmonisierung |
+|---|---|---|
+| **Syntax** (Format) | CSV, JSON, Tab-getrennt (MetaTrader) | alles über `pandas` in einheitliche Tabellen |
+| **Syntax** (Zeitzone) | Yahoo gemischt UTC, EODHD ortsbezogen, MetaTrader Broker-Zeit | alles auf zeitzonenlose Tagesebene gebracht |
+| **Syntax** (Datumsformat) | ISO-Strings, `YYYY.MM.DD` (MetaTrader), Epochensekunden (Reddit) | mit `pandas.to_datetime(...)` in echte Zeitstempel |
+| **Struktur** (Spaltennamen) | `Open/High/Low/Close` (Yahoo), `open/...` (EODHD), `<OPEN>/...` (MetaTrader) | alles auf kleingeschriebene `open/high/low/close` |
+| **Struktur** (Nachrichtenfelder) | Sentiment als verschachteltes Objekt (EODHD) vs. kein Sentiment (RSS) | `json_normalize()` flacht das EODHD-Objekt in Spalten auf |
+| **Semantik** (Bedeutung) | Schreibweise der Paare: `EURUSD=X`, `EURUSD.FOREX`, `EURUSD` | intern einheitlich `EUR_USD`, `EUR_CHF`, `GBP_USD` |
+| **Semantik** (Markttag) | gleicher Kalendertag ≠ gleicher Markttag (Kapitel 5.3) | **datengetriebene Datums-Ausrichtung** (siehe 6.2) |
+
+Diese Harmonisierung ist **retrospektiv** (sie passiert *nach* der Erhebung, weil wir die Quellsysteme nicht kontrollieren) — laut Vorlesung die häufigste Form in der Praxis, die aber die erreichbare Datenqualität begrenzt.
+
+### 6.2 Die Datums-Ausrichtung (Semantik des Markttags)
+
+Die letzte Zeile der Tabelle ist der entscheidende Schritt aus Kapitel 5.3. Das Skript `scripts/regenerate_forex_combined.py` macht ihn so:
+
+1. **Referenz festlegen:** Yahoo dient als Zeit-Referenz (seine `23:00/00:00`-Stempel werden mit `ceil("D")` sauber auf den nächsten Tag gerundet, was die Mischung korrekt auflöst).
+2. **Versatz messen:** Für jede andere Quelle (EODHD, MetaTrader) wird der Datums-Versatz von −2 bis +2 Tagen gesucht, der die **Tagesrendite-Korrelation** mit Yahoo maximiert.
+3. **Schutz gegen Schein-Verschiebungen:** Ein Versatz wird nur angewandt, wenn er die Korrelation um mindestens 0.15 verbessert. So bleibt EUR/CHF (bereits ausgerichtet) unangetastet, während EUR/USD und GBP/USD um +1 Tag korrigiert werden.
+4. **Protokollierung:** Das Skript gibt den gewählten Versatz und die Korrelation davor/danach aus — die Entscheidung ist also nachvollziehbar.
+
+Erst **nach** dieser Ausrichtung werden die Quellen kombiniert und gemittelt.
+
+Der harmonisierte Wechselkurs-Datensatz liegt in `data/processed/forex/forex_alle_quellen_kombiniert.csv` im **Langformat**: eine Zeile pro Tag-und-Paar, mit Spalten `yahoo_close`, `eodhd_close`, `metatrader_close` nebeneinander, plus `weekday`, `is_weekend`, `n_sources` (wie viele Quellen an dem Tag einen Wert haben) und `has_gap`.
+
+---
+
+## 7. Schritt 4 — Transformation und Feature Engineering
+
+Hier bauen wir aus den bereinigten Rohdaten die Grössen, mit denen die Analyse rechnet.
+
+### 7.1 Tages-Sentiment aus vielen Artikeln — warum Median statt Mittelwert
+
+An einem Tag gibt es oft mehrere Artikel mit je einem Sentiment-Wert. Wir fassen sie pro Tag zum **Median** zusammen (der mittlere Wert), nicht zum arithmetischen Mittel.
+
+**Begründung (Theorie-Bezug):** Die Vorlesung Woche 3 empfiehlt für ausreisseranfällige Daten den `RobustScaler`, der bewusst **Median und Interquartilsabstand** (englisch *Interquartile Range*, IQR — der Abstand zwischen dem 25-%- und dem 75-%-Wert) nutzt, weil „Ausreisser Median und IQR kaum beeinflussen". Dieselbe Logik gilt hier: Ein einzelner extrem formulierter Artikel (Sentiment ±1.0) verzieht das **Mittel** stark, den **Median** kaum. Da die Sentiment-Werte stark bei 0 gehäuft sind und vereinzelt Extremwerte haben, ist der Median die robustere Wahl.
+
+### 7.2 Renditen statt Kurs-Niveaus — warum
+
+Für die Analyse verwenden wir nicht den Kurs selbst, sondern seine **Tagesrendite** als **logarithmische Rendite**: *r_t = ln(P_t) − ln(P_{t−1})*.
+
+**Begründung:**
+- **Stationarität:** Kurs-Niveaus haben langfristige Trends (sie sind *nicht-stationär*). Eine Korrelation auf Niveaus misst vor allem Trend-Übereinstimmung, nicht die Reaktion auf Nachrichten. Renditen sind annähernd stationär.
+- **Symmetrie:** Logarithmische Renditen behandeln Anstieg und Abfall symmetrisch.
+- Dieser Punkt ist zentral für die richtige Deutung der Dashboard-Grafiken (Kapitel 9.4): Auf **Niveaus** sieht ein gemeinsamer Trend wie ein Vorlauf aus; erst auf **Renditen** trennt sich „bewegt sich gemeinsam" von „sagt vorher".
+
+### 7.3 Mittelwert über die Quellen — warum (und wann er gültig ist)
+
+Wo mehrere Quellen einen Kurs liefern, bilden wir den **Mittelwert** (nur über die an dem Tag vorhandenen Quellen). Grund: Forex hat keinen einen „wahren" Kurs (Kapitel 5.3); der Mittelwert glättet die kleine, normale Anbieter-Streuung und ist robuster als eine willkürlich gewählte Einzelquelle.
+
+**Wichtig:** Dieser Mittelwert ist nur sinnvoll, **nachdem** die Quellen auf denselben Markttag ausgerichtet sind (Kapitel 6.2). Vorher hätte er zwei verschiedene Tage gemischt. Gegenprobe: Die Lead/Lag-Ergebnisse mit dem ausgerichteten Mittel (r ≈ 0.18 / 0.21) stimmen praktisch mit denen einer sauberen Einzelquelle (nur Yahoo: 0.20 / 0.21) überein — der Mittelwert ist nach der Ausrichtung also robust.
+
+### 7.4 Aggregation, Interpolation und Normalisierung (Dashboard-Optionen)
+
+- **Aggregation auf Woche/Monat/Quartal:** über `pandas.resample` mit wählbarer Funktion. Fehlende Tage werden **nicht** vorher gefüllt — `resample` ignoriert `NaN`.
+- **Interpolation (optional):** ein Dashboard-Schalter „Fehlende Tage interpolieren (linear)". Er wirkt **nur** auf Kurs- und Ölreihen, **nie** auf Sentiment (Begründung MNAR, Kapitel 5.1), und schreibt nichts in die Rohdaten zurück — er verändert nur die Anzeige. So bleibt die Rohdaten-Integrität gewahrt. In der Analyse dient die interpolierte Variante als **Sensitivitätscheck** (Kapitel 9.5).
+- **Normalisierung (Index = 100):** teilt jede Reihe durch ihren ersten gültigen Wert und mal 100. So werden Reihen mit sehr unterschiedlichen Skalen (Kurs ~1.1, Öl ~80, Sentiment ~0.1) optisch vergleichbar.
+
+### 7.5 MetaTrader 15-Minuten → Tagesdaten (eine Validierung)
+
+Die 15-Minuten-Daten von MetaTrader werden auf Tagesbasis verdichtet (Eröffnung = erster Wert, Hoch = Maximum, Tief = Minimum, Schluss = letzter Wert). **Kontrolle:** Die so aggregierten Tageswerte stimmen exakt (100 %) mit dem separat gelieferten MetaTrader-Tagesexport überein — ein Beleg, dass unsere Aggregationslogik korrekt ist.
+
+---
+
+## 8. Schritt 5 — Sentiment-Analyse auf drei Wegen
+
+Wir berechnen die Stimmung auf **drei unterschiedliche Arten**, damit sichtbar wird, wie stark das Ergebnis von der Methode abhängt.
+
+### 8.1 Weg 1 — EODHD-Sentiment (vorberechnet)
+
+EODHD liefert pro Artikel bereits einen *Polarity*-Wert (Stimmungswert) zwischen −1 (negativ) und +1 (positiv). Die Methode ist nicht öffentlich dokumentiert, wir behandeln sie als „Black Box" (undurchsichtiges Verfahren). Einsatz: die saubere Methodik-Referenz im Dashboard (Seite „Master Grafik").
+
+### 8.2 Weg 2 — Eigene TextBlob-Analyse auf demselben EODHD-Text
+
+Wir nehmen **denselben** Artikeltext (Titel + Inhalt) und lassen die Python-Bibliothek **TextBlob** den Stimmungswert berechnen. Den Vergleich (eigene Berechnung vs. EODHD-Wert) zeigt das Dashboard auf der Seite „Sentiment-Vergleich". Zweck: einschätzen, wie nah ein einfaches, transparentes Verfahren an den undurchsichtigen EODHD-Wert herankommt.
+
+### 8.3 Weg 3 — TextBlob auf den Webscraping-Texten (Machbarkeitsnachweis)
+
+Titel und Zusammenfassung der gescrapten RSS-/Reddit-Artikel gehen in TextBlob; pro Tag bilden wir wieder den Median. Einsatz: der „Proof of Concept" (Kapitel 10). Idee: Wenn ein Zusammenhang **auch** mit einer ganz anderen Nachrichtenquelle und Methode auftaucht, ist er robuster.
+
+### 8.4 Was man über TextBlob wissen muss
+
+- TextBlob ist **lexikonbasiert** (es schlägt Wörter in einem Wörterbuch nach) und auf Allgemeinsprache trainiert. Für **finanzspezifische** Texte liefert es regelmässig den Wert 0 („neutral", weil das Fachvokabular im Lexikon schwach vertreten ist) — in unseren Daten bei rund einem Drittel der Artikel.
+- **Warum trotzdem TextBlob?** Es ist transparent, nachvollziehbar und reproduzierbar — im Bildungskontext wichtiger als ein leistungsstärkeres, aber undurchsichtiges Modell. Eine sinnvolle Erweiterung wären finanzspezifische Verfahren (FinBERT oder VADER mit dem Loughran-McDonald-Finanzlexikon); siehe Kapitel 12.
+
+**Abdeckung der Webscraping-Daten — ehrlich beziffert:** Die gescrapten Nachrichten umfassen **127 Tage**. Davon stammt **ein einziger** Tag aus dem September 2024; die eigentliche Abdeckung beginnt erst im **September 2025** und reicht bis April 2026. An **60 von 127 Tagen** liegt nur ein einziger Artikel vor (Median: 2 Artikel/Tag). Diese dünne und zeitlich konzentrierte Abdeckung ist der Grund, warum der Webscraping-Weg nur als Machbarkeitsnachweis dient, nicht als belastbarer Beleg.
+
+---
+
+## 9. Schritt 6 — Analyse und Antwort auf die Forschungsfrage
+
+### 9.1 Methode
+
+Wir messen die **Kreuzkorrelation** zwischen dem Sentiment am Tag *t* und der Kursrendite am Tag *t + k*, für *k* von −10 bis +10:
+
+> *ρ_k = Korrelation( Sentiment_t , Rendite_{t+k} )*
+
+- *k > 0*: Sentiment führt die Kursrendite (= unsere Hypothese H1).
+- *k = 0*: gleichzeitige Bewegung.
+- *k < 0*: der Kurs führt das Sentiment.
+
+**Einheit der Verzögerung — Kalendertage:** Die Reihen werden auf tägliche **Kalenderfrequenz** gebracht; der Lag *k* zählt also **Kalendertage**, nicht Handelstage. An Wochenenden ohne Kurs entstehen `NaN`-Renditen, die bei der Korrelation paarweise entfallen.
+
+**Signifikanz:** Unter der Annahme „kein Zusammenhang" (ρ = 0) liegt das 95-%-Konfidenzband bei etwa ±1.96/√n (n = Anzahl gemeinsamer Tage). Werte **innerhalb** des Bandes sind statistisch nicht von Null zu unterscheiden.
+
+**Mehrfachtests:** Wir prüfen 21 Verzögerungen gleichzeitig. Bei so vielen Tests findet man leicht zufällig einen „Treffer". Eine strenge Korrektur (Bonferroni) weitet das Band für 21 zweiseitige Tests auf etwa ±3.0/√n. Da benachbarte Verzögerungen aber stark zusammenhängen (autokorreliert sind), ist die effektive Zahl unabhängiger Tests kleiner — die Wahrheit liegt zwischen ±1.96 und ±3.0/√n. Wir nennen beide Grenzen, wo es darauf ankommt.
+
+Wir rechnen die Analyse **parallel** auf zwei Wegen (sauber = EODHD; dirty = Webscraping) und jeweils mit/ohne Kurs-Interpolation als Sensitivitätscheck.
+
+### 9.2 Ergebnis-Tabelle
+
+Reproduzierbar in `data/processed/news/lead_lag_results.csv`. „r am Maximum" ist die stärkste Korrelation über alle Verzögerungen (mit Vorzeichen), „r bei k=0" die gleichzeitige Korrelation.
+
+| Paar | Weg | Interp. | bestes k | r am Maximum | r bei k=0 | n | ±Band 95 % |
+|---|---|---|---:|---:|---:|---:|---:|
+| EUR/USD | sauber (EODHD) | nein | **0** | **+0.18** | +0.18 | 988 | ±0.06 |
+| EUR/USD | sauber (EODHD) | ja | 0 | +0.11 | +0.11 | 1432 | ±0.05 |
+| GBP/USD | sauber (EODHD) | nein | **0** | **+0.21** | +0.21 | 959 | ±0.06 |
+| GBP/USD | sauber (EODHD) | ja | 0 | +0.16 | +0.16 | 1401 | ±0.05 |
+| EUR/CHF | sauber (EODHD) | nein | 2 | −0.76 | +0.04 | **7** | ±0.74 |
+| EUR/CHF | sauber (EODHD) | ja | −4 | +0.66 | −0.08 | 10 | ±0.62 |
+| EUR/USD | dirty (Webscraping) | nein | 9 | −0.28 | −0.00 | 85 | ±0.21 |
+| GBP/USD | dirty (Webscraping) | nein | −4 | −0.15 | −0.09 | 85 | ±0.21 |
+| EUR/CHF | dirty (Webscraping) | nein | 5 | +0.30 | −0.01 | 85 | ±0.21 |
+
+### 9.3 Antwort auf die Forschungsfrage
+
+**Sauberer Weg, EUR/USD und GBP/USD:** Das Maximum der Kreuzkorrelation liegt **eindeutig bei k = 0**, mit r ≈ +0.18 bis +0.21. Bei n ≈ 1000 ist das Band ±0.06 — die Korrelation ist also klar statistisch gesichert, **aber sie ist gleichzeitig**. Für |k| > 0 fällt der Wert unter das Band.
+
+> **Antwort:** **H1 (Sentiment führt den Kurs) wird nicht gestützt.** Das Ergebnis passt zu **A1 (gleichzeitige Bewegung)**: Sentiment und Kurs reagieren auf dieselben Marktinformationen, ohne dass eine Reihe der anderen vorausläuft. Das Sentiment ist hier **Begleitinformation, kein Prognoseinstrument.**
+
+**Sauberer Weg, EUR/CHF:** r = −0.76 bei k = 2 klingt stark, beruht aber auf **n = 7** Tagen (Band ±0.74). Das ist das Lehrbeispiel **„Effektgrösse ohne Stichprobengrösse ist wertlos"** — statistisch nicht von Null zu unterscheiden. Wir führen es als negative Evidenz der dünnen EODHD-Abdeckung auf, nicht als Ergebnis über das Paar.
+
+**Dirty Weg (Webscraping):** Die Maxima liegen bei wechselnden Verzögerungen (k = 9, −4, 5), aber alle nahe oder innerhalb des Bandes ±0.21, bei nur n = 85. Nach Mehrfachtest-Korrektur ist nichts davon robust. → **nicht entscheidbar.** Das ist angesichts der dünnen Abdeckung (Kapitel 8.4) erwartbar.
+
+### 9.4 Warum die Grafik einen Vorlauf suggeriert — die Analyse aber nicht
+
+Im Dashboard kann der Eindruck entstehen, das Sentiment *führe* den Kurs („Sentiment runter, dann Kurs runter"). Wir haben das gezielt geprüft, weil es genau die Hypothese stützen würde. Ergebnis auf mehreren Ebenen:
+
+| Ebene | EUR/USD | GBP/USD |
+|---|---|---|
+| Renditen **täglich** | Maximum bei Lag **0** (r=0.18) | Lag **0** (r=0.21) |
+| Renditen **wöchentlich** | Lag **0** (r=0.23) | Lag **0** (r=0.17) |
+| Renditen **monatlich** | Lag +5 (r=0.29) | Lag −5 (r=0.27) |
+| **Niveau** monatlich | breit, ~0.16–0.19 | **Plateau ~0.44 über Lags −1 bis +6** |
+
+**Erklärung:** Das Dashboard zeigt **Niveaus** (Kurs-Level und Sentiment-Level, oft auf Index = 100 normiert). Auf Niveau-Ebene korrelieren beide Reihen — bei GBP/USD mit ~0.44 — **aber über ein breites Band von Verzögerungen** (−1 bis +6 alle ~0.4). Genau das sieht das Auge als „Vorlauf".
+
+Ein **echter** Vorlauf zeigt sich als **scharfe Spitze bei einer bestimmten positiven Verzögerung**. Ein **breites Plateau** dagegen ist die Signatur zweier Reihen, die über den Zeitraum **gemeinsam trenden** — nicht von Vorhersage. Sobald man auf **Renditen** wechselt (die stationäre, faire Messung, Kapitel 7.2), verschwindet der scheinbare Vorlauf: das Maximum liegt täglich **und** wöchentlich bei Lag 0. Die monatlichen „Spitzen" (+5 bzw. −5) zeigen in **entgegengesetzte** Richtungen und liegen mit n ≈ 40 **innerhalb** des Bandes (±0.31) — also Rauschen, kein Signal.
+
+> **Kernlektion:** Zwei gemeinsam trendende Reihen sehen im **Niveau** wie ein Vorlauf aus; erst die Analyse auf **Renditen** unterscheidet „bewegt sich gemeinsam" von „sagt vorher". Hier: gemeinsam (Lag 0), kein Vorlauf.
+
+### 9.5 Effekt der Interpolation
+
+Mit linear interpolierten Kurs-Renditen sinkt r für EUR/USD und GBP/USD von ~0.18–0.21 auf ~0.11–0.16. **Das ist erwartbar und methodisch korrekt:** Interpolierte Wochenend-Renditen sind künstlich konstruiert und tragen kein neues Signal — sie verdünnen die Stichprobe. Die Aussage „gleichzeitige Korrelation, kein Vorlauf" gilt in **beiden** Varianten. Deshalb ist die Variante **ohne** Interpolation der primäre Auswertungspfad; die interpolierte dient als Robustheitsnachweis.
+
+### 9.6 Methodische Grenzen (sind Teil der Antwort)
+
+- **Korrelation ≠ Kausalität.** Selbst die klare gleichzeitige Korrelation zeigt nur, dass Markt und Nachrichten gemeinsam reagieren — nicht warum. Ein gemeinsamer dritter Faktor (Makrodaten, Notenbank-Entscheide) kann beide erklären.
+- **Lead/Lag wird in der Vorlesung nicht behandelt** — die Methodik folgt der Standard-Statistik-Literatur. Ein formaler **Granger-Test** wäre der nächste Schritt; er ist im Notebook als deaktivierte Zelle vorbereitet (Paket `statsmodels` nötig).
+- **EUR/CHF ist bei EODHD praktisch keine Datenquelle** (7 Tage) — negative Evidenz, kein Paar-Ergebnis.
+- **Webscraping ist nicht paar-spezifisch** und dünn (Kapitel 8.4).
+- **TextBlob auf Finanztexten** liefert oft 0 (Kapitel 8.4).
+
+---
+
+## 10. Die zwei „Master-Grafiken": sauberer Weg vs. Machbarkeitsnachweis
+
+Das Dashboard stellt zwei Wege direkt nebeneinander:
+
+| Baustein | „Master Grafik" (sauberer Weg) | „Master Grafik 2" (Proof of Concept) |
+|---|---|---|
+| Kurs | Yahoo + EODHD (ausgerichtet, gemittelt) | identisch |
+| Öl | Yahoo (WTI/Brent) | identisch |
+| **Sentiment** | **EODHD-Polarity, Tagesmedian** | **TextBlob auf Webscraping-Text** |
+
+Der Sinn des zweiten Wegs: Falls der im sauberen Weg gefundene Zusammenhang nur durch die EODHD-Methode entstünde, wäre die Schlussfolgerung wackelig. Taucht ein ähnliches Bild **auch** mit anderer Quelle und Methode auf, ist es robuster. In unserem Fall ist der Webscraping-Weg dafür allerdings zu dünn (Kapitel 8.4) — er bleibt ein Machbarkeitsnachweis.
+
+---
+
+## 11. Das Dashboard
+
+Eine interaktive Streamlit-Anwendung (`dashboard.py`) mit u. a. diesen Seiten:
 
 | Seite | Zweck |
 |---|---|
-| **Übersicht** | Projekt-Kennzahlen, Quellenanzahl, Datenpunkte |
-| **Quellenvergleich** | Yahoo vs. EODHD vs. MT5 (wo verfügbar) — Kursverläufe direkt überlagert |
-| **Lückenanalyse** | Welche Tage fehlen bei welcher Quelle |
-| **Preisabweichungen** | Spread zwischen den Quellen über Zeit; hilft bei Entscheidung, welche Quelle zu bevorzugen ist |
-| **Ölpreise** | WTI + Brent mit Return-Statistiken |
-| **Nachrichten** | Artikel-Browser über EODHD-News, inkl. Sentiment-Verteilung |
-| **Sentiment-Vergleich** | Scatter EODHD-Polarity vs. TextBlob auf denselben Artikel — zeigt Methodenunterschiede |
-| **Eigene Grafik** | Freie Ad-hoc-Visualisierung über die kombinierten Forex-Daten |
-| **Master Grafik** | Sauberer Weg (Abschnitt 9) |
-| **Master Grafik 2** | Proof of Concept (Abschnitt 10) |
-| **Workflow** | Pipeline-Diagramm des Projekts (Rohdaten → Processing → Dashboard) als Graphviz-Visualisierung inkl. Erläuterung der Schichten |
+| Übersicht | Projekt-Kennzahlen, Quellenzahl, Datenpunkte |
+| Quellenvergleich | Yahoo vs. EODHD vs. MetaTrader, Kursverläufe überlagert |
+| Lückenanalyse | welche Tage bei welcher Quelle fehlen |
+| Preisabweichungen | Differenz zwischen den Quellen über die Zeit |
+| Ölpreise | WTI + Brent mit Rendite-Statistik |
+| Nachrichten | Artikel-Browser über die EODHD-Nachrichten |
+| Sentiment-Vergleich | EODHD-Wert vs. eigene TextBlob-Berechnung auf demselben Text |
+| Master Grafik / Master Grafik 2 | sauberer Weg / Machbarkeitsnachweis (Kapitel 10) |
+| Workflow | das Pipeline-Diagramm |
 
-Caching über `@st.cache_data`, damit wiederholte Navigation flüssig bleibt.
+### 11.1 Visualisierungs-Entscheidungen (Theorie-Bezug Woche 8)
 
-### 11.1 Visualisierungs-Entscheidungen mit Slide-Bezug
-
-Die Plot-Wahl folgt der Vorlesung W8 (`slides/Folien 2 2.pdf`):
-
-| Entscheidung | Slide-Quelle | Begründung |
-|---|---|---|
-| **Linien- statt Bar-Charts für Zeitreihen** | W8, S. 6 | Wahrnehmungs-Ranking: Position auf gemeinsamer Skala ist die effizienteste visuelle Codierung für quantitative Daten |
-| **Vollständige Y-Achse (kein Zoomen auf engen Bereich)** | W8, S. 9–14 | Anti-Pattern abgeschnittener Achsen ("Fox-News-Beispiel") — gleiche Daten können je nach Achsenwahl Trends suggerieren oder verbergen |
-| **2D, nicht 3D** | W8, S. 16–18 | "3D-Pie-Charts verzerren Verhältnisse durch Perspektive" — Heatmaps und Linien sind besser lesbar |
-| **Viridis statt Jet bei sequenziellen Skalen** | W8, S. 24 | "Jet — nicht gleichmässig wahrnehmbar; Viridis — gleichmässig wahrnehmbar (perceptually uniform)" |
-| **Divergierende Farbpalette für Sentiment** | W8, S. 29 | Sentiment hat einen natürlichen Mittelpunkt bei 0 — divergierende Skalen heben Vorzeichen heraus |
-| **Tableau-Standardpalette für kategoriale Quellenunterscheidung** | W8 + Claude | Yahoo / EODHD / MetaTrader sind kategorial, kein Ordinalverhältnis → kontrastreiche Standardfarben statt Verlauf |
-| **Mehrachsen-Layout je Kategorie** (Forex / Öl / Sentiment) | Claude | Drei Reihen mit unterschiedlichen Skalen sollten getrennte Y-Achsen haben, sonst dominiert die Reihe mit grösster Varianz die Optik |
-| **Rasterlinien transparent (`alpha=0.3`)** | W8, S. 34 | "Transparenz im Bereich 15%–45% am wirkungsvollsten" |
-| **Farbenblind-Verträglichkeit** | W8, S. 21 | "Ca. 8% der Männer hat eine Rot-Grün-Schwäche" — Tableau-Defaults und Viridis sind beide CB-tauglich |
+| Entscheidung | Begründung |
+|---|---|
+| **Linien statt Balken** für Zeitreihen | Position auf gemeinsamer Skala ist die effizienteste visuelle Codierung |
+| **Vollständige Y-Achse** (kein Beschnitt) | abgeschnittene Achsen können Trends vortäuschen oder verbergen |
+| **2D statt 3D** | 3D verzerrt Verhältnisse durch Perspektive |
+| **Viridis statt Jet** bei Verläufen | Viridis ist gleichmässig wahrnehmbar (*perceptually uniform*) |
+| **Divergierende Farbskala für Sentiment** | Sentiment hat einen natürlichen Nullpunkt |
+| **Getrennte Y-Achsen je Kategorie** (Kurs/Öl/Sentiment) | sonst dominiert die Reihe mit der grössten Varianz die Optik |
+| **Farbenblind-Verträglichkeit** | rund 8 % der Männer haben eine Rot-Grün-Schwäche; Viridis und Tableau-Farben sind tauglich |
 
 ---
 
-## 12. Analyse-Resultate: Lead/Lag
+## 12. Reproduzierbarkeit — Befehle und Reihenfolge
 
-Die Hypothese aus Abschnitt 1 wird im Notebook `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb` operationalisiert: Cross-Korrelation $\hat\rho_k = \mathrm{corr}(\text{sentiment}_t, \text{return}_{t+k})$ für $k \in [-10, +10]$ Handelstage, parallel auf saubererm und Dirty-Pfad, jeweils mit und ohne Forex-Interpolation.
-
-**Methodik kurz** (vollständig im Notebook): Forex wird als Mittelwert der verfügbaren Quellen pro Tag genommen, daraus Log-Returns; Sentiment ist der Tagesmedian der Polarity. Konfidenzband $\pm 1{.}96/\sqrt{n}$ unter $H_0\!: \rho = 0$ — Pearson-Approximation, ohne Multiple-Testing-Korrektur. Bei 21 getesteten Lags würde Bonferroni das Band auf etwa $\pm 2{.}80/\sqrt{n}$ aufweiten.
-
-### 12.1 Resultate-Tabelle
-
-Reproduzierbar via `data/processed/news/lead_lag_results.csv` (vom Notebook erzeugt).
-
-| Paar | Weg | Interp | best lag | r am best lag | r bei k=0 | n_med | ±band 95% |
-|---|---|---|---:|---:|---:|---:|---:|
-| EUR/USD | clean (EODHD) | nein | **0** | **+0.20** | +0.20 | 988 | ±0.06 |
-| EUR/USD | clean (EODHD) | ja   | 0 | +0.11 | +0.11 | 1432 | ±0.05 |
-| GBP/USD | clean (EODHD) | nein | **0** | **+0.24** | +0.24 | 959 | ±0.06 |
-| GBP/USD | clean (EODHD) | ja   | 0 | +0.18 | +0.18 | 1401 | ±0.05 |
-| EUR/CHF | clean (EODHD) | nein | 2 | −0.76 | +0.04 | **7** | ±0.74 |
-| EUR/CHF | clean (EODHD) | ja   | −4 | +0.66 | −0.08 | 10 | ±0.62 |
-| EUR/USD | dirty (Webscraping) | nein | 9 | −0.27 | −0.06 | 85 | ±0.21 |
-| EUR/USD | dirty (Webscraping) | ja   | −4 | −0.24 | −0.04 | 126 | ±0.17 |
-| GBP/USD | dirty (Webscraping) | nein | 9 | −0.24 | −0.08 | 85 | ±0.21 |
-| GBP/USD | dirty (Webscraping) | ja   | −4 | −0.18 | −0.05 | 126 | ±0.17 |
-| EUR/CHF | dirty (Webscraping) | nein | 5 | +0.30 | −0.01 | 85 | ±0.21 |
-| EUR/CHF | dirty (Webscraping) | ja   | −4 | +0.24 | +0.00 | 126 | ±0.17 |
-
-### 12.2 Beantwortung der Hypothese
-
-**Sauberer Weg, EUR/USD und GBP/USD:** Das Maximum der Cross-Korrelation liegt eindeutig bei $k = 0$ mit $r \approx +0.20$ bis $+0.24$. Bei $n \approx 1000$ ist das Konfidenzband $\pm 0{.}06$ — die Korrelation ist hochsignifikant, **aber sie ist gleichzeitig**. Bei $|k| > 0$ fällt $|r|$ deutlich unter das Konfidenzband.
-
-**Aussage:** **H1 (Sentiment führt Kurs) wird nicht gestützt.** Das Ergebnis ist konsistent mit **A1 (gleichzeitige Bewegung)**: Sentiment und Kurs reagieren auf dieselben Marktinformationen, ohne dass eine Reihe der anderen vorausläuft. Sentiment ist hier **Begleitinformation**, kein Prognoseinstrument.
-
-**Dirty Weg, EUR/USD und GBP/USD:** Das Maximum verschiebt sich auf $k = +9$ mit $r \approx -0.27$ bzw. $-0.24$. Vorzeichen umgekehrt zum sauberen Weg, $n = 85$. Konfidenzband ohne Korrektur $\pm 0{.}21$, Bonferroni $\pm 0{.}30$. Damit liegt das Resultat **auf der Signifikanzschwelle und wird nach Multiple-Testing-Korrektur nicht mehr robust**. Ohne weitere Daten lässt sich daraus kein Lead-Effekt ableiten.
-
-**Sauberer Weg, EUR/CHF:** $r = -0{.}76$ bei $k = 2$ klingt beeindruckend, aber $n = 7$ und Konfidenzband $\pm 0{.}74$ — der "Effekt" ist statistisch nicht von Null unterscheidbar. Das ist das Lehrbeispiel **"Effekt-Grösse ohne Stichprobengrösse ist wertlos"** und wird in Sektion 13 (Limitationen) als negative Evidence dokumentiert.
-
-### 12.3 Effekt der Interpolation
-
-Für EUR/USD und GBP/USD sinkt $r$ mit linear interpolierten Forex-Returns von ca. $0{.}20$ auf $0{.}11$–$0{.}18$. **Das ist erwartbar und methodisch korrekt:** interpolierte Wochenend-Returns sind synthetisch konstruiert und enthalten kein neues Informations-Signal — sie verdünnen die Stichprobe ohne Aussagekraft hinzuzufügen.
-
-**Konsequenz für die Doku:** Die Variante **ohne Interpolation** ist der primäre Auswertungspfad. Die interpolierte Variante dient als Sensitivitätscheck und zeigt, dass das Lead/Lag-Resultat methodenrobust ist — die Aussage "gleichzeitige Korrelation, kein Lead" gilt in beiden Varianten.
-
-### 12.4 Vergleich der zwei Wege
-
-| Befund | Sauberer Weg | Dirty Weg |
-|---|---|---|
-| Vorzeichen der Maximalkorrelation | positiv | negativ |
-| Lag des Maximums | 0 (gleichzeitig) | +9 (verzögert) |
-| Stichprobengrösse | gross (~1000) | klein (~85) |
-| Robust nach Multiple Testing? | ja | nein |
-| Aussage | klar gleichzeitig | nicht entscheidbar |
-
-Dass die zwei Wege auseinanderfallen, ist **selbst ein Resultat**: Das EODHD-Sentiment ist für EUR/USD und GBP/USD pro Paar gefiltert (98–99 % Coverage), das Webscraping-Sentiment ist global über alle Forex-News aggregiert. Die unterschiedlichen Befunde zeigen, dass paar-spezifisches Sentiment qualitativ andere Information trägt als globales Forex-Sentiment.
-
-### 12.5 Methodische Limitationen (sind Teil der Antwort)
-
-- **Korrelation ≠ Kausalität.** Selbst die starke gleichzeitige Korrelation auf dem sauberen Weg zeigt nur, dass Markt und News gemeinsam reagieren — nicht *warum*. Ein gemeinsamer dritter Faktor (Makrodaten, Notenbank-Entscheidungen) erklärt beide.
-- **Lead/Lag wird in der Vorlesung nicht behandelt** — die Methodik orientiert sich an Standard-Statistik-Literatur (Quelle: Claude). Ein formaler **Granger-Test** wäre der nächste methodische Schritt; er ist im Notebook als deaktivierte Cell vorbereitet (`statsmodels`-Abhängigkeit nicht in `requirements.txt`).
-- **EUR/CHF EODHD ist keine Datenquelle** im praktischen Sinn — 7 Datenpunkte. Wir dokumentieren das als negative Evidence der EODHD-Coverage, nicht als Resultat über das Paar.
-- **Webscraping-Sentiment ist nicht paar-spezifisch.** Wir verwenden denselben Tageswert für alle drei Paare; eine paar-spezifische Filterung würde unter ~30 Tagen Coverage pro Paar fallen und keine Aussage mehr zulassen.
-- **TextBlob auf Finanztexten** — siehe Abschnitt 8.4: ~33 % der Artikel bekommen Polarity 0. Ein finanzspezifisches Modell (FinBERT, VADER + Loughran-McDonald-Lexikon) würde die Sentiment-Stichprobe deutlich vergrössern.
-
----
-
-## 13. Reproduzierbarkeit — Befehle und Reihenfolge
-
-Alle Schritte sind idempotent. Die Reihenfolge:
+Alle Schritte sind idempotent. Reihenfolge:
 
 ```bash
 source .venv/bin/activate
 
-# 1. Rohdaten laden (Free-Plan beachten — 18 EODHD-Calls)
+# 1. Rohdaten laden (EODHD-Tageslimit beachten!)
 python src/data_loading/yahoo_loader.py
 python src/data_loading/eodhd_loader.py
 python src/data_loading/eodhd_news_loader.py
 python src/data_loading/webscraping_loader.py
 python src/data_loading/oil_loader.py
 
-# 2. Rohdaten zu processed-Ebene verdichten
-python scripts/regenerate_forex_combined.py
+# 2. Bereinigen, ausrichten, zusammenführen
+python scripts/regenerate_forex_combined.py          # inkl. Datums-Ausrichtung (Kap. 6.2)
 python scripts/regenerate_webscraping_sentiment.py
 
-# 3. Lead/Lag-Notebook regenerieren (erzeugt auch lead_lag_results.csv)
-python scripts/generate_lead_lag_notebook.py
-jupyter nbconvert --to notebook --execute \
-    notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb \
-    --output sentiment_kurs_lead_lag_analyse.ipynb
+# 3. Analyse-Ergebnisse erzeugen
+python scripts/regenerate_lead_lag_results.py        # schreibt lead_lag_results.csv (headless)
+# alternativ das Notebook in Jupyter ausfuehren:
+#   notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb
 
 # 4. Dashboard starten
 streamlit run dashboard.py
 ```
 
-Die Notebooks in `notebooks/` sind zusätzliche EDA- und Analyseartefakte. Sie sind nicht Voraussetzung für das Dashboard, liefern aber die ausführlichen Ergebnistabellen und Visualisierungen, die für den Bericht relevant sind. Das Lead/Lag-Notebook ist die Quelle der Resultate-Tabelle in Abschnitt 12.
+**Hinweis:** Das Lead/Lag-Notebook und `regenerate_lead_lag_results.py` nutzen dieselbe Logik und erzeugen dieselben Zahlen. Das Skript ist der zuverlässige, kernel-freie Weg (die automatische Notebook-Ausführung kann im Jupyter-Kernel hängen bleiben).
 
 ---
 
-## 14. Bekannte Einschränkungen
+## 13. Bekannte Einschränkungen
 
 | Punkt | Auswirkung | Behandlung |
 |---|---|---|
-| EUR/CHF-News bei EODHD ≈ 13 Artikel | Keine belastbare Sentiment-Korrelation für EUR/CHF | Dokumentiert, EUR/CHF aus Sentiment-Analyse ausgenommen |
-| DailyFX-RSS: HTTP 403 | Eine der fünf RSS-Quellen nicht nutzbar | Skript fängt Fehler ab, logged `WARNUNG: HTTP 403`; restliche vier Quellen reichen |
-| Investing.com: HTTP 403 | HTML-Scraping blockiert | Dokumentiert, RSS-Variante (ForexLive, derselbe Anbieter) wird stattdessen genutzt |
-| Webscraping nur ab Scrape-Zeitpunkt | Kein freier Blick in die Vergangenheit | Feeds reichen aber faktisch bis ~6 Monate zurück; mehrere Scrape-Zeitpunkte verlängern die Abdeckung |
-| TextBlob: Nullwerte bei Finanzvokabular | ~33% der Artikel mit Polarity=0 | Bewusst offen dokumentiert; qualitativer Vergleich in Sentiment-Vergleich-Seite |
-| MetaTrader: Datenstand 2025-12-26 | Kein 2026-Anteil | MT5 ausschließlich im Quellenvergleich genutzt, nicht in der Sentiment-Korrelation |
-| RSS mit `feedparser.parse(url)` scheiterte auf macOS durch SSL-Verify | Null Artikel am 22.04.2026 | Loader angepasst: `requests.get()` zieht den Content, `feedparser.parse(response.text)` parst — liefert wieder Artikel |
-
-Der SSL-Bug beim Scraper ist ein gutes Beispiel für den iterativen Umgang mit Datenquellen: **Erkannt → Ursache benannt → behoben → Commit dokumentiert.**
+| EUR/CHF-Nachrichten bei EODHD ≈ 13 Artikel | keine belastbare Sentiment-Korrelation | dokumentiert, aus der Sentiment-Analyse ausgenommen |
+| Webscraping nur ab Scrape-Zeitpunkt, dünn (Kap. 8.4) | dirty-Weg nicht belastbar | offen dokumentiert, nur als Machbarkeitsnachweis |
+| TextBlob: ~⅓ der Artikel mit Wert 0 | unterschätzt Sentiment-Abdeckung | offen dokumentiert; FinBERT/VADER als Erweiterung |
+| MetaTrader-Daten enden 2025-12-26 | kein 2026-Anteil | nur im Quellenvergleich genutzt |
+| Quellen-Datierungsfehler (Kap. 5.3) | hätte den Mittelwert verfälscht | datengetrieben ausgerichtet, dokumentiert, behoben |
+| DailyFX-/Investing.com-Scraping: HTTP 403 | zwei Quellen blockiert | abgefangen; übrige Feeds reichen |
+| RSS-SSL-Fehler auf macOS | anfangs 0 Artikel | über `requests` + `feedparser` behoben |
 
 ---
 
-## 15. Projektstruktur (Kurzübersicht)
+## 14. Projektstruktur (Kurzübersicht)
 
 ```
 datawrangling/
-├── src/data_loading/          # Loader pro Quelle
-│   ├── yahoo_loader.py
-│   ├── eodhd_loader.py
-│   ├── eodhd_news_loader.py
-│   ├── webscraping_loader.py
-│   └── oil_loader.py
-├── scripts/                   # idempotente Reprozessierungs-Scripts
-│   ├── regenerate_forex_combined.py
-│   └── regenerate_webscraping_sentiment.py
+├── src/data_loading/          # ein Lade-Skript pro Quelle
+├── scripts/                   # idempotente Verarbeitungs-/Build-Skripte
+│   ├── regenerate_forex_combined.py        # Bereinigung + Datums-Ausrichtung
+│   ├── regenerate_webscraping_sentiment.py
+│   ├── regenerate_lead_lag_results.py      # Analyse-Ergebnisse (headless)
+│   ├── generate_lead_lag_notebook.py
+│   └── build_documentation_docx.py
 ├── notebooks/
 │   ├── rohdaten_laden/        # EDA pro Quelle (01–05)
-│   └── datenverarbeitung/     # Analyse-Notebooks
-│       ├── datenanalyse_forex.ipynb
-│       ├── datenanalyse_oil.ipynb
-│       ├── news_forex_korrelation_kombiniert.ipynb
-│       ├── sentiment_analyse_vergleich.ipynb
-│       ├── sentiment_kurs_lead_lag_analyse.ipynb   # Hauptanalyse für Sektion 12
-│       └── poc_webscraping_sentiment.ipynb
-├── data/
-│   ├── raw/                   # Rohdaten, nicht verändert
-│   ├── processed/             # harmonisiert, zusammengeführt
-│   └── final/                 # finaler Datensatz
+│   └── datenverarbeitung/     # Analyse-Notebooks (inkl. Lead/Lag)
+├── data/  (raw / processed / final)
+├── docs/architektur/          # Pipeline-Diagramm
 ├── dashboard.py               # Streamlit-App
-├── CLAUDE.md                  # Code-Konventionen, Setup
 └── DOKUMENTATION.md           # dieses Dokument
 ```
 
+*EDA = Exploratory Data Analysis (explorative Datenanalyse).*
+
 ---
 
-## 16. Protokoll — Chronologie der wichtigsten Entscheidungen
+## 15. Protokoll — Chronologie der wichtigsten Entscheidungen
 
-| Datum (2026) | Entscheidung / Beobachtung |
+| Zeitpunkt (2026) | Entscheidung / Beobachtung |
 |---|---|
-| Feb 2026 | Themenfestlegung: Forex + News-Sentiment + Öl. Zeitraum initial 2024-2025. |
-| Anfang März | EODHD-API-Integration, Free-Plan-Limit (20 Calls/Tag) als Randbedingung identifiziert. |
-| Anfang/Mitte März | Erste Webscraping-Schnappschüsse (03-03 bis 03-25). RSS-SSL-Bug noch nicht bemerkt, da Feeds zu dem Zeitpunkt funktionierten. |
-| März | Entscheidung pro **Median** (statt Mittel) bei Tagesaggregation der Polarity — robustere zentrale Tendenz. |
-| März | Hinzufügen von `news_forex_korrelation_kombiniert.ipynb` mit Öl-Overlay und separater Sentiment-Diagnose. |
-| 19.04. | Dashboard-Seite „Sentiment-Vergleich" zum Gegenüberstellen der eigenen TextBlob-Analyse und der EODHD-Polarity auf identischem Text. |
-| 22.04. | Alle Rohdaten bis heute frisch gezogen. Zeitraum auf 2022-01-01 erweitert, damit mehr Historie im Repo steht. |
-| 22.04. | RSS-SSL-Bug aufgetreten (0 Artikel in allen 4 Feeds). Mit dem in Fenlins Notebook validierten `requests` → `feedparser` Fix korrigiert. Die fehlerhafte Reddit-only-CSV als `*_PRE-FIX_*.csv` archiviert. |
-| 22.04. | News-Loader umgestellt von `limit=300` auf `limit=1000` → deutlich weniger API-Calls bei gleicher Datenmenge. |
-| 22.04. | Proof-of-Concept-Notebook `poc_webscraping_sentiment.ipynb` + paralleles Script — zeigt, dass der saubere Weg mit einer unabhängigen Nachrichtenquelle reproduzierbar ist. |
-| 22.04. | Dashboard „Master Grafik 2" von MT5+Webscraping auf Yahoo+EODHD+Webscraping umgebaut — die beiden Master-Grafiken zeigen jetzt „sauberer Weg" und „Proof of Concept" im direkten Vergleich. |
-| 22.04. | Altdaten (Dateien mit `_to_2026-03-25`) in `data_archive/` verschoben. Ordner via `.gitignore` aus dem Repo gehalten, bleibt lokal verfügbar. |
-| 22.04. | Präzisierung: die Interpolations-Option in Master Grafik 1 und 2 überspringt Sentiment-Reihen. Begründung siehe 4.2. |
-| 22.04. | Neue Dashboard-Seite „Workflow" mit Graphviz-Diagramm der Pipeline (Rohdaten → Loader → Raw-Storage → Processing → Processed-Storage → Dashboard). |
-| 06.05. | Streamlit-Cloud-Deploy: zwei Bugs gefixt — `KeyError: date_only` im EODHD-News-Loader (`date_only` aus `date.dt.normalize()` ableiten statt aus CSV lesen) und `TypeError` bei `pd.concat` der Master-Grafik (EODHD-Datum mit `utc=True` parsen, dann `tz_convert(None)`). Commits `2b8d4ae`, `13140fe`. |
-| 06.05. | Lead/Lag-Notebook erstellt (`sentiment_kurs_lead_lag_analyse.ipynb`) als zentrale Analyse für die Hypothese aus Sektion 1. Methodik: Cross-Korrelation Sentiment vs. Forex-Log-Returns, Lags ±10, beide Wege parallel, mit/ohne Interpolation als Sensitivitätscheck. Resultate in `data/processed/news/lead_lag_results.csv` und Sektion 12 dieser Doku. |
-| 06.05. | Methodik-Klärung dokumentiert: Outer-Join in `forex_alle_quellen_kombiniert.csv` bleibt ohne Interpolation und ohne Mittelwert; Mittelwert wird zur Laufzeit gebildet, Interpolation ist optional und wird im Lead/Lag-Notebook explizit gegen die Variante ohne Interpolation verglichen. Die `_v2`-Outputs aus `news_forex_korrelation_kombiniert.ipynb` (Interpolation+Mittelwert vorab) werden als alternative Methodik-Spur gehalten, sind aber nicht der primäre Auswertungspfad. |
+| Februar | Themenfestlegung: Wechselkurse + Nachrichten-Sentiment + Öl. |
+| Anfang März | EODHD-Integration; Tageslimit als Randbedingung erkannt. |
+| März | Entscheidung pro **Median** bei der Tagesaggregation des Sentiments (robuster). |
+| April | Daten bis 2022 zurück frisch geladen; RSS-SSL-Fehler erkannt und behoben; Webscraping-Machbarkeitsnachweis ergänzt. |
+| Mai | Lead/Lag-Notebook erstellt; Outer-Join ohne vorab gebildeten Mittelwert/Interpolation festgelegt (Mittel/Interpolation erst zur Laufzeit). |
+| Juni | **Qualitätsprüfung über Quellen:** Datierungsfehler (Yahoo/EODHD/MetaTrader-Tagesversatz) entdeckt, datengetriebene Ausrichtung in die Pipeline eingebaut, Lead/Lag neu gerechnet. **Beobachtung „Grafik suggeriert Vorlauf"** geprüft → Niveau-Trend vs. Renditen-Analyse abgegrenzt. Dokumentation als verständliches Protokoll neu aufgebaut; Umlaute in Code/Kommentaren vereinheitlicht. |
 
 ---
 
-## 17. Offen / ToDo
+## 16. Offen / Ausblick
 
-- **Statischer Bericht**: PDF/Word-Version mit fixierten Plots (statt nur interaktivem Dashboard) für direkte Vergleichbarkeit, gemäss Wunsch der Studierenden. Architektur-Diagramm aus der Workflow-Dashboard-Seite als statisches PNG exportieren.
-- **Repo-Aufräumung vor Abgabe**: Doppelte/veraltete Notebooks bereinigen — `notebooks/04_eda_news_webscraping.ipynb` (Top-Level) ist Doppelgänger zur Version in `rohdaten_laden/`; `_fenlin`-Variante und `Test_datenanalyse.ipynb` evaluieren; `Folien 4.pdf`/`Folien 5.pdf`/`Folien 6.pdf` im `slides/`-Ordner sind byte-identische Doppel von `W04_dwae.pdf` und `W05_dwae.pdf` (Slide-Agent-Befund 06.05.); `data_archive/`-Struktur befüllen.
-- **Granger-Causality-Test**: Im Lead/Lag-Notebook als deaktivierte Cell vorbereitet — `pip install statsmodels` und Aktivierung der Cell genügen. Bei einer formellen Auswertung ist Granger der nächste methodische Schritt nach Cross-Korrelation.
-- **FinBERT / VADER mit Loughran-McDonald-Lexikon** als Sentiment-Methode für Finanztexte evaluieren — würde die ~33 % Null-Polarity bei TextBlob deutlich reduzieren und ist eine inhaltlich sinnvolle Erweiterung.
-- Optional: `news_forex_korrelation_kombiniert.ipynb` mit aktualisierten Daten neu durchlaufen, um die `_v2`-CSVs zu regenerieren (Dashboard ist nicht davon abhängig).
-- Optional: Fenlins parallele Arbeit (`05_merge_und_korrelation.ipynb`, `data/final/forex_news_merged.csv`) mit dem PoC-Pfad abgleichen und ggf. konsolidieren.
+- **Granger-Test** als formaler Folgeschritt (Paket `statsmodels`).
+- **Finanzspezifisches Sentiment** (FinBERT, VADER + Loughran-McDonald-Lexikon) statt TextBlob — würde die ~⅓ Nullwerte deutlich reduzieren.
+- **Grafiken in den Bericht einbetten** (Kreuzkorrelations-Kurve, Quellenvergleich, Lückenanalyse, Niveau-vs-Renditen-Gegenüberstellung) — folgt als letzter Schritt vor der Abgabe.

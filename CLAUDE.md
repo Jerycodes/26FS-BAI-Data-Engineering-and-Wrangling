@@ -12,6 +12,7 @@ Academic Data Engineering & Wrangling project (FHNW, course 26FS BAI). Analyzes 
 - Activate: `source .venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
 - Key dependencies: `pandas`, `yfinance`, `requests`, `feedparser`, `beautifulsoup4`, `textblob`, `plotly`, `seaborn`, `streamlit>=1.45.0`
+- **Build-Tooling-Dependencies fehlen in `requirements.txt`**: `scripts/build_documentation_docx.py` braucht `python-docx`, `scripts/generate_lead_lag_notebook.py` braucht `nbformat` — vor dem Ausführen ggf. `pip install python-docx nbformat` (sind im `.venv/` bereits vorhanden).
 - Copy `.env.example` to `.env` and add EODHD API key (also has MetaTrader 5 login fields)
 - Streamlit theme config in `.streamlit/config.toml` (dark theme, headless)
 - No test framework, linter, or build system is configured
@@ -53,10 +54,13 @@ Each loader is a standalone script (functional style, no classes) with module-le
 - **oil_loader.py** — yfinance (no auth). Loads WTI (`CL=F`) + Brent (`BZ=F`) Daily into `data/raw/oil/yahoo/`. Mirrors `yahoo_loader.py`.
 
 ### Helper Scripts (`scripts/`)
-Idempotente Reprozessierungs-Scripts, die die Kernlogik relevanter Notebooks 1:1 spiegeln und somit einen Jupyter-Kernel nicht voraussetzen:
+Idempotente Reprozessierungs- und Build-Scripts, die einen Jupyter-Kernel nicht voraussetzen:
 
-- **regenerate_forex_combined.py** — Lädt Yahoo, EODHD und MetaTrader-Daily, produziert `data/processed/forex/forex_alle_quellen_kombiniert.csv` (langformat mit `pair`, `n_sources`, `has_gap`). Spiegelt `datenanalyse_forex.ipynb`.
+- **regenerate_forex_combined.py** — Lädt Yahoo, EODHD und MetaTrader-Daily, produziert `data/processed/forex/forex_alle_quellen_kombiniert.csv` (langformat mit `pair`, `n_sources`, `has_gap`). **Qualitätsprüfung — Datums-Ausrichtung:** richtet jede Nicht-Yahoo-Quelle datengetrieben an Yahoo aus (Versatz in [-2,+2] Kalendertagen, der die Tagesrendite-Korrelation maximiert; nur angewandt bei Gewinn ≥ `MIN_CORR_GAIN`), BEVOR gemittelt wird. Grund: EODHD (und bei EUR/USD MetaTrader) waren bei EUR/USD & GBP/USD um 1 Tag versetzt (Yahoo 23:00/00:00-UTC-Mix vs. EODHD-Sonntagslabel). Siehe `[[forex_source_misalignment]]` und DOKUMENTATION.md Kap. 5.3/6.2. Spiegelt `datenanalyse_forex.ipynb`.
 - **regenerate_webscraping_sentiment.py** — Kombiniert alle `all_scraped_news_*.csv` (ohne `PRE-FIX`), dedupliziert auf `link`, berechnet TextBlob-Polarity auf Titel+Summary, aggregiert auf Tagesmedian. Produziert `data/processed/news/webscraping_articles_sentiment.csv` (Artikel-Level) + `webscraping_sentiment_daily.csv` (Tagesebene). Spiegelt `notebooks/datenverarbeitung/poc_webscraping_sentiment.ipynb` (Sections 1–4 + 7).
+- **generate_lead_lag_notebook.py** — Baut `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb` deterministisch neu auf (jeder Run überschreibt manuelle Änderungen am Notebook). Lags zählen **Kalendertage** (Reindex auf `freq="D"`), nicht Handelstage.
+- **regenerate_lead_lag_results.py** — Erzeugt `data/processed/news/lead_lag_results.csv` **headless** (ohne Jupyter-Kernel), 1:1-Logik des Lead/Lag-Notebooks; nutzt `close_mean` über die ausgerichteten Quellen. Nötig, weil `jupyter nbconvert --execute` auf diesem Setup im Kernel hängen kann.
+- **build_documentation_docx.py** — Konvertiert `DOKUMENTATION.md` in `DOKUMENTATION.docx` (Haupt-Abgabe-Dokument). Nutzt `python-docx`, parst `**bold**` / `` `code` `` / Listen / Tabellen / Code-Blöcke / **Bilder** (`![alt](pfad)` → eingebettet, alt-Text als Bildunterschrift).
 
 ### Scaffolded but empty modules
 `src/data_cleaning/`, `src/data_transformation/`, `src/pipeline/` — only contain `__init__.py`.
@@ -72,8 +76,9 @@ Organized into subdirectories:
   - `news_forex_korrelation_kombiniert.ipynb` — Same analysis but builds its own combined CSV (`forex_kombiniert_v2.csv`) from raw, then writes a single processed long-format CSV (`forex_verarbeitet_v2.csv`). Includes oil overlay (Schritt 4b) and a sentiment-diagnose section (Schritt 3b)
   - `sentiment_analyse_vergleich.ipynb` — Compares EODHD's pre-computed `polarity` against a TextBlob sentiment computed locally on the article text, per pair. Mirrors the dashboard's `Sentiment-Vergleich` page.
   - `poc_webscraping_sentiment.ipynb` — **Proof of Concept**: Nimmt alle `all_scraped_news_*.csv` (ohne PRE-FIX), dedupliziert auf `link`, berechnet TextBlob-Polarity auf Titel+Summary, aggregiert Tagesmedian, vergleicht mit Yahoo+EODHD-Forex (Überlapp ab Sep 2024). Schreibt die processed-Outputs in `data/processed/news/`. Kernlogik parallel als `scripts/regenerate_webscraping_sentiment.py` verfügbar.
+  - `sentiment_kurs_lead_lag_analyse.ipynb` — **Zentrales Analyse-Notebook** zur Projektfrage "Hat das Sentiment einen Einfluss auf Wechselkurse, und mit welcher zeitlichen Verzögerung?". Wird deterministisch von `scripts/generate_lead_lag_notebook.py` erzeugt — manuelle Änderungen am Notebook werden beim Re-Generieren überschrieben. Schreibt `data/processed/news/lead_lag_results.csv`.
 
-Note: `notebooks/04_eda_news_webscraping_fenlin.ipynb` is an extra variant sitting at the top level of `notebooks/` (not in a subfolder).
+Top-Level-Notebooks (nicht in Unterordnern): `04_eda_news_webscraping.ipynb`, `04_eda_news_webscraping_fenlin.ipynb` und `05_merge_und_korrelation.ipynb`. Das `_fenlin`-Notebook validiert den feedparser-SSL-Fix. Achtung: `04_eda_news_webscraping.ipynb` existiert sowohl auf Top-Level als auch in `notebooks/rohdaten_laden/` — Aufräum-Kandidat.
 
 German markdown documentation, English code. Use `seaborn-v0_8` plot style.
 
@@ -87,13 +92,20 @@ Streamlit app with multiple pages selected from the sidebar (`Übersicht`, `Quel
 - **EUR_CHF news coverage from EODHD is essentially absent** (~12 articles total) — sentiment for that pair is not meaningful.
 
 ### Data Layout
-All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb`, **not** by a loader script — must be regenerated when raw data changes) and the `_v2` outputs (`forex_kombiniert_v2.csv`, `forex_verarbeitet_v2.csv`) from `news_forex_korrelation_kombiniert.ipynb`. `data/processed/news/` is scaffolded but currently empty — the planned refactoring target for processed news CSVs. Oil prices live under `data/raw/oil/yahoo/`.
+All raw data lives in `data/raw/` (referenced by notebooks via `../../data/raw/` relative paths). `data/processed/forex/` contains `forex_alle_quellen_kombiniert.csv` (produced by `datenanalyse_forex.ipynb` oder `scripts/regenerate_forex_combined.py` — **nicht** von einem Loader-Script; muss bei Änderung der Rohdaten regeneriert werden). Die `_v2`-Outputs (`forex_kombiniert_v2.csv`, `forex_verarbeitet_v2.csv`) aus `news_forex_korrelation_kombiniert.ipynb` werden ggf. dort ebenfalls abgelegt. Oil prices live under `data/raw/oil/yahoo/`.
+
+`data/processed/news/` enthält aktuell:
+- `webscraping_articles_sentiment.csv` — Artikel-Level TextBlob-Sentiment (deduped) aus PoC.
+- `webscraping_sentiment_daily.csv` — Tages-Aggregation (Median) für Dashboard `Master Grafik 2`.
+- `lead_lag_results.csv` — Ergebnisse aus dem Lead/Lag-Notebook.
 
 Within `raw/`:
 - `forex/yahoo/` and `forex/eodhd/` — CSV files: `{PAIR}_{START}_to_{END}.csv`
 - `forex/metatrader/` — MetaTrader 5 exports: tab-separated CSVs with `<DATE>`, `<OPEN>`, etc. headers. Currently EURUSD Daily and M15 (15-minute) data.
 - `news/eodhd/` — JSON + CSV per currency pair
 - `news/webscraping/` — Scraped RSS + Reddit CSV with date stamp
+
+`data_archive/` spiegelt einen früheren `raw/`+`processed/`-Snapshot (Forex / News / Oil). Nicht überschreiben, sondern als Backup-Referenz behandeln.
 
 ## Conventions
 
@@ -109,6 +121,13 @@ Within `raw/`:
 - **Do not modify `.env`** — contains real API key
 - **Sentiment NaN values**: Some EODHD news articles have `sentiment: None`. Preserve these as NaN — do not replace with empty dicts or drop rows.
 
+## Documentation & Architektur-Artefakte
+
+- **`DOKUMENTATION.md`** — Haupt-Bericht (Sektionen 1–17): Projektziel, Quellen, Pipeline, Missings, Duplikate, Harmonisierung, Transformation, drei Sentiment-Wege, Master Grafik 1+2, Dashboard, Lead/Lag-Resultate, Reproduzierbarkeits-Befehle, Einschränkungen, Projektstruktur, Entscheidungs-Chronologie, ToDos. Bei inhaltlichen Updates immer hier zuerst pflegen — `DOKUMENTATION.docx` ist generiert.
+- **`DOKUMENTATION.docx`** — Generiert via `python scripts/build_documentation_docx.py`. Nicht direkt editieren.
+- **`docs/architektur/`** — Pipeline-Diagramm: `pipeline.gv` (Graphviz-Quelle), `pipeline.png`, `pipeline.svg`. PNG ist in `DOKUMENTATION.md` (Sektion 3) eingebettet.
+- **`slides/`** — Unterrichtsslides (W1–W5: Imputation, Harmonisierung, Scraping etc.) als Referenz bei methodischen Entscheidungen.
+
 ## Planned Refactoring
 
 See `CLAUDE_KONTEXT.md` for full details and ready-to-use code snippets.
@@ -116,15 +135,14 @@ See `CLAUDE_KONTEXT.md` for full details and ready-to-use code snippets.
 **Goal**: Separate raw data preservation from processing in all loaders.
 
 **Current state**:
+- `webscraping_loader.py` nutzt mittlerweile `requests.get()` → `feedparser.parse(response.text)` (SSL-Fix erledigt), schreibt aber weiterhin nur CSV — keine Roh-JSON-Persistenz.
 - `eodhd_news_loader.py` saves both JSON + CSV but processes inline (no separate `save_raw`/`load_raw`/`process_news`/`save_processed` functions)
-- `webscraping_loader.py` only saves CSV — no raw JSON preservation at all
-- `webscraping_loader.py` uses direct `feedparser.parse(url)` which has SSL issues — needs fix to fetch with `requests` first
 
 **Target**: All loaders follow `API → Raw JSON → Load JSON → Process → Processed CSV` with explicit `save_raw()`, `load_raw()`, `process_*()`, `save_processed()` functions. Processed output goes to `data/processed/news/` (not `data/raw/`). Notebooks 03 and 04 need matching updates to split loading/saving cells.
 
 ## Known Issues
 
-- **feedparser SSL**: Must fetch RSS content with `requests` first, then pass to `feedparser.parse()`. The current `webscraping_loader.py` uses direct URL parsing — this needs fixing.
 - **Investing.com**: Returns HTTP 403 — scraping blocked, documented as known limitation
 - **RSS/Reddit**: Only provide current data, no historical coverage for the study period
 - **EODHD News**: Some articles have `None` sentiment (preserved as NaN, not dropped)
+- **feedparser SSL** (erledigt): `webscraping_loader.py` holt RSS-Inhalte erst mit `requests` (certifi) und gibt den Text an `feedparser.parse()` — der Fix ist im Modul-Docstring dokumentiert.

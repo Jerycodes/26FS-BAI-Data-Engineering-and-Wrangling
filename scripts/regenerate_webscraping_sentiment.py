@@ -2,7 +2,7 @@
 regenerate_webscraping_sentiment.py - PoC-Pipeline für Webscraping-News.
 
 Spiegelt die Kernlogik aus notebooks/datenverarbeitung/poc_webscraping_sentiment.ipynb
-wider (Abschnitte 1-4 + 7): alle Scrape-Schnappschuesse einlesen, deduplizieren,
+wider (Abschnitte 1-4 + 7): alle Scrape-Schnappschüsse einlesen, deduplizieren,
 TextBlob-Sentiment berechnen, Tagesmedian aggregieren und nach
 data/processed/news/ schreiben.
 
@@ -53,9 +53,9 @@ def compute_sentiment(row: pd.Series) -> pd.Series:
 
 
 def main() -> None:
-    print("Lade alle Webscraping-Schnappschuesse ...")
+    print("Lade alle Webscraping-Schnappschüsse ...")
     df_all = load_all_scrapes()
-    print(f"  -> {len(df_all)} Eintraege total (vor Deduplikation)\n")
+    print(f"  -> {len(df_all)} Einträge total (vor Deduplikation)\n")
 
     print("Deduplikation nach 'link':")
     dupe_link = df_all.duplicated(subset="link").sum()
@@ -65,7 +65,7 @@ def main() -> None:
     df_unique = df_all.drop_duplicates(subset="link", keep="first").reset_index(drop=True)
     print(f"  -> {len(df_unique)} unique Artikel\n")
 
-    print("Datenqualitaet:")
+    print("Datenqualität:")
     print(f"  Leere Titel:        {(df_unique['title'].fillna('').str.strip() == '').sum()}")
     print(f"  Leere Links:        {(df_unique['link'].fillna('').str.strip() == '').sum()}")
     print(f"  Ungültiges Datum:   {df_unique['date'].isna().sum()}")

@@ -2,7 +2,7 @@
 webscraping_loader.py - Nachrichten von RSS Feeds und Reddit laden.
 
 Hinweis zum SSL-Fix: `feedparser.parse(url)` nutzt intern Python's ssl/urllib und
-schlaegt auf manchen macOS-Installationen mit `CERTIFICATE_VERIFY_FAILED` fehl
+schlägt auf manchen macOS-Installationen mit `CERTIFICATE_VERIFY_FAILED` fehl
 (keine Artikel). Wir holen den Feed daher vorher mit `requests` (nutzt certifi)
 und geben den Text an `feedparser.parse()`. Diese Methode wurde in
 `notebooks/04_eda_news_webscraping_fenlin.ipynb` validiert.
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         df_all = pd.concat([df[common_cols] for df in frames], ignore_index=True)
         path_csv = os.path.join(output_dir, f"all_scraped_news_{today}.csv")
         clean_text_columns(df_all, ['title', 'summary']).to_csv(path_csv, index=False)
-        print(f"\nGesamt gespeichert: {path_csv} ({len(df_all)} Eintraege)")
+        print(f"\nGesamt gespeichert: {path_csv} ({len(df_all)} Einträge)")
 
         path_json = os.path.join(output_dir, f"all_scraped_news_{today}.json")
         df_all.to_json(path_json, orient='records', date_format='iso', force_ascii=False)

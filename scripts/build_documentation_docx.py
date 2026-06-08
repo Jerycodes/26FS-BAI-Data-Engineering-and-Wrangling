@@ -19,9 +19,14 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 SRC = Path("DOKUMENTATION.md")
 DST = Path("DOKUMENTATION.docx")
 
+# Markdown-Bildsyntax: ![alt](pfad)
+IMAGE_RE = re.compile(r"^!\[(?P<alt>.*?)\]\((?P<path>.*?)\)\s*$")
+# Maximale Bildbreite im Dokument.
+IMAGE_WIDTH = Cm(15)
+
 
 def parse_inline_formatting(run_paragraph, text: str) -> None:
-    """Parst **bold**, `code` und normaler Text; fuegt Runs dem Paragraph hinzu."""
+    """Parst **bold**, `code` und normaler Text; fügt Runs dem Paragraph hinzu."""
     pattern = re.compile(r"(\*\*.+?\*\*|`[^`]+`)")
     parts = pattern.split(text)
     for part in parts:
@@ -56,6 +61,28 @@ def add_code_block(doc: Document, lines: list[str]) -> None:
     run.font.name = "Consolas"
     run.font.size = Pt(9)
     run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+
+
+def add_image(doc: Document, alt: str, path: str) -> None:
+    """Bettet ein Bild zentriert ein, mit der alt-Beschreibung als Bildunterschrift.
+
+    Fehlt die Datei, wird statt eines Absturzes ein Hinweis als Text geschrieben.
+    """
+    img_path = Path(path)
+    if not img_path.exists():
+        p = doc.add_paragraph()
+        run = p.add_run(f"[Bild fehlt: {path}]")
+        run.italic = True
+        return
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.add_run().add_picture(str(img_path), width=IMAGE_WIDTH)
+    if alt.strip():
+        cap = doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = cap.add_run(alt.strip())
+        run.italic = True
+        run.font.size = Pt(9)
 
 
 def add_table(doc: Document, rows: list[list[str]]) -> None:
@@ -126,6 +153,13 @@ def main() -> None:
 
         if line.strip() == "---":
             flush_list()
+            i += 1
+            continue
+
+        m_img = IMAGE_RE.match(line.strip())
+        if m_img:
+            flush_list()
+            add_image(doc, m_img.group("alt"), m_img.group("path"))
             i += 1
             continue
 

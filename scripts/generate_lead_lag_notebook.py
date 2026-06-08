@@ -79,8 +79,11 @@ Der Vergleich beider Wege ist Teil der Aussage: stimmen die Resultate überein, 
 
 Cross-Korrelation für Lead/Lag-Analyse von Zeitreihen ist **kein Inhalt der FHNW-Vorlesung W1–W8**. Die Methodik orientiert sich an der Standard-Statistik-Literatur:
 
-- **Pearson-Korrelation** zwischen $x_t$ und $y_{t+k}$ für $k \in [-10, +10]$ Handelstage.
-- Vorzeichenkonvention: $k > 0$ heisst "$x$ führt $y$ um $k$ Tage".
+- **Pearson-Korrelation** zwischen $x_t$ und $y_{t+k}$ für $k \in [-10, +10]$ **Kalendertage**.
+  (Die Reihen werden auf tägliche Kalenderfrequenz reindiziert; der Lag $k$ zählt also
+  Kalendertage, nicht Handelstage. An Wochenenden ohne Kurs entstehen NaN-Returns, die
+  bei der Korrelation paarweise entfallen.)
+- Vorzeichenkonvention: $k > 0$ heisst "$x$ führt $y$ um $k$ Kalendertage".
 - Konfidenzband (kein Signifikanztest): unter $H_0\!: \rho = 0$ ist $\hat\rho \approx \mathcal{N}(0, 1/N)$, also $\pm 1{.}96/\sqrt{N}$ für $\alpha = 5\%$.
 - **Returns** statt Preis-Levels: Forex-Levels haben Trends (nicht-stationär); Korrelation auf Levels ist statistisch verzerrt. Log-Returns $r_t = \ln(P_t / P_{t-1})$ sind annähernd stationär und symmetrisch.
 
@@ -139,6 +142,14 @@ Die Forex-Daten kommen aus `data/processed/forex/forex_alle_quellen_kombiniert.c
 Diese Datei wird vom Skript `scripts/regenerate_forex_combined.py` erzeugt und enthält
 die Quellen Yahoo, EODHD und (nur für EUR/USD) MetaTrader 5 in **Long-Format**:
 eine Zeile pro `(date, pair)`-Kombination, eine Spalte `<source>_close` pro Quelle.
+
+**Wichtig — Datums-Ausrichtung passiert bereits beim Erzeugen der Datei:** Yahoo,
+EODHD und MetaTrader stempeln den Tages-Schlusskurs unterschiedlich (Yahoo gemischt
+23:00/00:00 UTC; EODHD labelt den Sonntags-Eröffnungsbalken). Bei EUR/USD und GBP/USD
+war EODHD (und bei EUR/USD auch MetaTrader) dadurch um einen Kalendertag verschoben.
+`regenerate_forex_combined.py` richtet jede Nicht-Yahoo-Quelle datengetrieben an der
+Yahoo-Referenz aus, BEVOR sie hier gemittelt wird. Der hier gebildete Mittelwert
+kombiniert also denselben Markttag über die Quellen.
 
 **Designentscheidung — kein Mittelwert/Interpolation in der Roh-Datei:** Wir bilden
 den Mittelwert *nicht* schon im CSV, sondern erst hier im Notebook. Das hat zwei

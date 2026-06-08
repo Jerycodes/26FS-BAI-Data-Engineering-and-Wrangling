@@ -1067,7 +1067,7 @@ elif page == "Master Grafik":
         st.stop()
 
     # Optional interpolieren (vor Aggregation) — ABER nur Forex/Öl; Sentiment bleibt NaN,
-    # weil "kein Artikel" != "neutraler Artikel" ist. Interpolation auf Sentiment waere
+    # weil "kein Artikel" != "neutraler Artikel" ist. Interpolation auf Sentiment wäre
     # methodisch falsch.
     if fill_gaps:
         full_idx = pd.date_range(df_master.index.min(), df_master.index.max(), freq="D")
@@ -1197,13 +1197,13 @@ elif page == "Master Grafik 2":
         "Gleiche Methodik wie Master Grafik 1, aber mit **Webscraping-News** (RSS + Reddit) "
         "und **eigener TextBlob-Sentiment-Analyse** statt EODHD. Forex/Öl bleiben identisch "
         "(Yahoo + EODHD kombiniert). Dient dem Vergleich, ob der Zusammenhang in Master Grafik 1 "
-        "mit einer unabhaengigen Nachrichtenquelle reproduzierbar ist."
+        "mit einer unabhängigen Nachrichtenquelle reproduzierbar ist."
     )
 
     if webscraping_sent_daily.empty:
         st.warning(
             "Aggregiertes Webscraping-Sentiment fehlt. Bitte einmalig "
-            "`python scripts/regenerate_webscraping_sentiment.py` ausfuehren — das erzeugt "
+            "`python scripts/regenerate_webscraping_sentiment.py` ausführen — das erzeugt "
             "`data/processed/news/webscraping_sentiment_daily.csv`."
         )
         st.stop()
