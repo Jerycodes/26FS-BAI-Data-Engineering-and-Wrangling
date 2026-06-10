@@ -962,8 +962,8 @@ elif page == "Lead/Lag-Analyse":
     st.subheader("Granger-Test: Sentiment als Prädiktor der Kursrendite")
     granger_df = pd.DataFrame({
         "Lag (Tage)": [1, 2, 3, 4, 5],
-        "EUR/USD p-Wert (Sentiment auf Kurs)": ["0.001", "0.000", "0.001", "0.001", "0.002"],
-        "GBP/USD p-Wert (Sentiment auf Kurs)": ["0.000", "0.000", "0.000", "0.000", "0.000"],
+        "EUR/USD p-Wert (Sentiment auf Kurs)": ["0.001", "<0.001", "0.001", "0.001", "0.002"],
+        "GBP/USD p-Wert (Sentiment auf Kurs)": ["<0.001", "<0.001", "<0.001", "<0.001", "<0.001"],
     })
     st.dataframe(granger_df, use_container_width=True, hide_index=True)
     st.markdown(
