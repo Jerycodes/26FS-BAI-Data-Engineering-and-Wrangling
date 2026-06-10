@@ -27,3 +27,12 @@ slides/
 # Stray-Stub-Dateien aus frueheren Tests
 hi_jerry
 test_fenlin
+
+# Word-Lock-Dateien (Dokument in Word geoeffnet)
+~$*
+
+# Kursmaterial (lokal, wie slides/)
+FS26_DWaE_Berwertungskriterien.pdf
+
+# Lokale Claude-Code-Einstellungen (Berechtigungen, pro Maschine)
+.claude/settings.local.json

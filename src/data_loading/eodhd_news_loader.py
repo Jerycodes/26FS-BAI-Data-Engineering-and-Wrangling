@@ -83,7 +83,8 @@ if __name__ == "__main__":
 
             # Verarbeitete Daten als CSV speichern
             df = pd.DataFrame(articles)
-            df["date"] = pd.to_datetime(df["date"])
+            # utc=True: bei gemischten Zeitzonen-Offsets bricht pandas 2.x sonst ab
+            df["date"] = pd.to_datetime(df["date"], utc=True)
 
             if "sentiment" in df.columns:
                 sentiment_df = pd.json_normalize(df["sentiment"])

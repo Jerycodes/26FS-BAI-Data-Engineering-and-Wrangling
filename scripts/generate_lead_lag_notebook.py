@@ -136,7 +136,7 @@ PAIRS = list(PAIR_LABELS.keys())
 cells.append(md(r"""
 ## 2. Daten laden
 
-### 2.1 Forex — Outer-Join aller Quellen
+### 2.1 Forex — kombinierte Quellen auf dem Yahoo-Handelskalender
 
 Die Forex-Daten kommen aus `data/processed/forex/forex_alle_quellen_kombiniert.csv`.
 Diese Datei wird vom Skript `scripts/regenerate_forex_combined.py` erzeugt und enthält
@@ -320,7 +320,7 @@ die Limitation diskutieren.
 """))
 
 cells.append(code(r"""
-def make_dataset(returns_df: pd.DataFrame, sentiment: pd.Series, *, interpolate: bool) -> pd.DataFrame:
+def make_dataset(returns_df: pd.DataFrame, sentiment: pd.Series, *, interpolate: bool):
     # Tagesfrequenz-Reindex; optional Forex linear interpolieren; Sentiment unangetastet.
     full_idx = pd.date_range(returns_df.index.min(), returns_df.index.max(), freq="D")
     df = returns_df.reindex(full_idx)
@@ -450,16 +450,16 @@ cells.append(md(r"""
 
 Die folgenden Zellen erzeugen die Abbildungen, die im Bericht die anschauliche
 Frage beantworten: *War das Sentiment in einer Woche negativ, fällt der Kurs in
-den darauffolgenden Wochen?* Sie werden zusätzlich nach `docs/figures/` gespeichert.
+den darauffolgenden Wochen?* Die Bericht-Versionen dieser Abbildungen erzeugt
+`scripts/build_report_figures.py` (mit Zoom-Panel); das Notebook zeigt sie nur inline,
+damit ein Notebook-Lauf die Bericht-Abbildungen nicht überschreibt.
 Die Woche ist dabei nur ein Beispiel-Zeithorizont; dieselbe Auswertung lässt sich
 analog auf Tage, zehn Tage oder Monate anwenden.
 """))
 
 cells.append(code(r"""
-FIGDIR = ROOT / "docs" / "figures"
-FIGDIR.mkdir(parents=True, exist_ok=True)
 
-# Wochen-Ueberlagerung: Kursniveau (Linie) und Sentiment je Woche (Balken)
+# Wochen-Überlagerung: Kursniveau (Linie) und Sentiment je Woche (Balken)
 for pair in ["EUR_USD", "GBP_USD"]:
     pw = forex_close[pair].resample("W-FRI").last().dropna()
     sw = sentiment_eodhd[pair].resample("W-FRI").median().reindex(pw.index)
@@ -475,7 +475,6 @@ for pair in ["EUR_USD", "GBP_USD"]:
     ax2.grid(False)
     ax1.set_title(f"{PAIR_LABELS[pair]}: Kursniveau und Nachrichten-Sentiment je Woche")
     fig.tight_layout()
-    fig.savefig(FIGDIR / f"fig_weekly_{pair}.png", dpi=150)
     plt.show()
 """))
 
@@ -501,7 +500,6 @@ ax.set_title("Sagt das Sentiment einer Woche die Kursbewegung der Folgewochen vo
 ax.set_xticks(ks)
 ax.legend()
 fig.tight_layout()
-fig.savefig(FIGDIR / "fig_forward_weeks.png", dpi=150)
 plt.show()
 """))
 
@@ -600,9 +598,9 @@ Zahl ist bei der vorliegenden Stichprobe nicht seriös begründbar. Die typische
 Befunde, die in dieser Datenlage zu erwarten sind (und in den Plots geprüft
 werden sollten):
 
-1. **Korrelation auf Lag 0** in der Größenordnung 0.0–0.15 — schwach, am Rand des
-   Konfidenzbandes. Das ist konsistent mit einer **gleichzeitigen** statt
-   führenden Reaktion.
+1. **Korrelation auf Lag 0** von 0.18 (EUR/USD) bzw. 0.21 (GBP/USD) — klar über dem
+   Konfidenzband, bei allen anderen Lags deutlich tiefer. Das ist konsistent mit einer
+   **gleichzeitigen** statt führenden Reaktion.
 2. **Asymmetrie zwischen positivem und negativem Lag** liefert den entscheidenden
    Hinweis: ist die Korrelation bei $k > 0$ deutlich höher als bei $k < 0$, hat
    Sentiment einen **Vorlauf**. Liegt das Maximum bei $k < 0$, läuft der Markt
@@ -613,13 +611,13 @@ werden sollten):
 
 Die genaue Aussage — und damit die Antwort auf die Hypothese — ergibt sich aus
 dem Output, sobald das Notebook auf den aktuellen Daten gerechnet wurde. Die
-Interpretation gehört in die `DOKUMENTATION.md` (Sektion "Analyse-Resultate"),
-**nicht** als hartcodierte Aussage hier ins Notebook.
+Interpretation gehört in den Bericht `DOKUMENTATION.docx` (Kapitel 9, gebaut
+über `scripts/build_report_docx.py`), **nicht** als hartcodierte Aussage hier ins Notebook.
 
 ## 8. Limitationen
 
-- **Stichprobengrösse**: pro Paar ~300–500 Tages-Datenpunkte mit gleichzeitig
-  Sentiment und Return. Für Lag-Analysen am Rande des Vertretbaren.
+- **Stichprobengrösse**: pro Paar rund 1100 Tage mit gleichzeitig Sentiment und
+  Return (EUR/USD 1108, GBP/USD 1105); beim Webscraping-Weg nur 85 Tage.
 - **EUR/CHF EODHD**: ~12 Artikel — nicht aussagekräftig.
 - **Webscraping-Sentiment**: nicht paar-spezifisch; nur eine globale Forex-Stimmung.
 - **TextBlob auf Finanztexten**: TextBlob ist auf Allgemeinsprache trainiert;
@@ -636,6 +634,8 @@ Interpretation gehört in die `DOKUMENTATION.md` (Sektion "Analyse-Resultate"),
 # ---------------------------------------------------------------------------
 
 nb = new_notebook(cells=cells)
+for i, c in enumerate(nb.cells):
+    c.id = f"cell-{i:03d}"  # deterministisch statt zufaelliger nbformat-IDs
 nb.metadata.update({
     "kernelspec": {"name": "python3", "display_name": "Python 3"},
     "language_info": {"name": "python"},

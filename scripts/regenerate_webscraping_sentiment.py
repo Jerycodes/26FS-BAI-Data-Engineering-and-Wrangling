@@ -40,9 +40,12 @@ def load_all_scrapes() -> pd.DataFrame:
 
 
 def compute_sentiment(row: pd.Series) -> pd.Series:
-    title = str(row.get("title") or "")
-    summary = str(row.get("summary") or "")
-    text = (title + ". " + summary).strip()
+    # pd.isna-Pruefung statt `or ""`: NaN ist truthy und wuerde sonst als
+    # Literal-Text "nan" in den Sentiment-Text gelangen.
+    title = row.get("title")
+    summary = row.get("summary")
+    parts = [str(x) for x in (title, summary) if isinstance(x, str) and x.strip()]
+    text = ". ".join(parts).strip()
     if not text or text == ".":
         return pd.Series({"polarity_tb": np.nan, "subjectivity_tb": np.nan})
     blob = TextBlob(text)

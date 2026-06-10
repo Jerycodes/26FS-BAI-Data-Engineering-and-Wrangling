@@ -27,6 +27,30 @@ PAIR_LABELS = {"EUR_USD": "EUR/USD", "EUR_CHF": "EUR/CHF", "GBP_USD": "GBP/USD"}
 OIL_TICKERS = ["WTI_Crude_Oil", "Brent_Crude_Oil"]
 OIL_LABELS = {"WTI_Crude_Oil": "WTI Crude Oil", "Brent_Crude_Oil": "Brent Crude Oil"}
 
+# Farbenblind-sichere Okabe-Ito-Palette (Projektvorgabe: kein Rot/Grün-Kontrast).
+# Wird überall dort verwendet, wo Farben semantisch unterscheiden (positiv/negativ,
+# vorhanden/fehlend, Kategorie-Achsen).
+OKABE_ITO = {
+    "blau": "#0072B2",
+    "orange": "#E69F00",
+    "vermillion": "#D55E00",
+    "himmelblau": "#56B4E9",
+    "gelb": "#F0E442",
+    "blaugrün": "#009E73",
+}
+PAIR_COLORS = {
+    "EUR_USD": OKABE_ITO["blau"],
+    "EUR_CHF": OKABE_ITO["orange"],
+    "GBP_USD": OKABE_ITO["vermillion"],
+}
+
+
+def hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """Hex-Farbe in rgba-String mit Transparenz umwandeln (für Plotly-Füllflächen)."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 # ---------------------------------------------------------------------------
 # Data Loading (cached)
 # ---------------------------------------------------------------------------
@@ -81,7 +105,10 @@ def load_oil_data():
         files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "oil", "yahoo", f"{ticker}_*.csv")))
         if files:
             df = pd.read_csv(files[-1], index_col=0, parse_dates=True)
-            df.index = pd.to_datetime(df.index, utc=True).tz_localize(None).ceil("D")
+            # Öl ist auf Mitternacht New York gestempelt: normalize() statt ceil("D"),
+            # sonst rutschen alle Tage auf den Folgetag (ceil ist nur für die
+            # 23:00-UTC-Stempel der Yahoo-Forex-Daten richtig).
+            df.index = pd.to_datetime(df.index, utc=True).tz_localize(None).normalize()
             df = df[~df.index.duplicated(keep="first")]
             df = df.rename(columns=str.lower)
             oil[ticker] = df
@@ -164,6 +191,17 @@ def load_webscraping_articles_sentiment():
     return df
 
 
+@st.cache_data
+def load_lead_lag_results():
+    """Liest die Zusammenfassung der Lead/Lag-Analyse (bestes Lag, max. Korrelation,
+    Korrelation bei Lag 0, Stichprobengrösse, 95%-Konfidenzband) aus dem
+    zentralen Analyse-Notebook bzw. scripts/regenerate_lead_lag_results.py."""
+    path = os.path.join(DATA_DIR, "processed", "news", "lead_lag_results.csv")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    return pd.read_csv(path)
+
+
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
@@ -174,6 +212,7 @@ news_eodhd = load_news_eodhd()
 news_scraping = load_news_webscraping()
 webscraping_sent_daily = load_webscraping_sentiment_daily()
 webscraping_articles_sent = load_webscraping_articles_sentiment()
+lead_lag_summary = load_lead_lag_results()
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -188,6 +227,7 @@ page = st.sidebar.radio("Navigation", [
     "Ölpreise",
     "Nachrichten",
     "Sentiment-Vergleich",
+    "Lead/Lag-Analyse",
     "Eigene Grafik",
     "Master Grafik",
     "Master Grafik 2",
@@ -301,7 +341,7 @@ elif page == "Quellenvergleich":
                 mode="lines",
                 line=dict(width=1),
             ))
-        fig_diff.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.3)
+        fig_diff.add_hline(y=0, line_dash="dash", line_color=OKABE_ITO["vermillion"], opacity=0.3)
         fig_diff.update_layout(height=350, hovermode="x unified", yaxis_title="Differenz")
         st.plotly_chart(fig_diff, use_container_width=True)
 
@@ -344,7 +384,7 @@ elif page == "Lückenanalyse":
         monthly.T.values,
         x=monthly.index.strftime("%Y-%m"),
         y=[s.capitalize() for s in sources],
-        color_continuous_scale="RdYlGn",
+        color_continuous_scale=[OKABE_ITO["vermillion"], OKABE_ITO["gelb"], OKABE_ITO["blau"]],
         zmin=0, zmax=1,
         labels=dict(color="Abdeckung"),
         aspect="auto",
@@ -374,7 +414,7 @@ elif page == "Lückenanalyse":
         recent.T.values,
         x=recent.index.strftime("%Y-%m-%d"),
         y=[s.capitalize() for s in sources],
-        color_continuous_scale=["#ff4444", "#44bb44"],
+        color_continuous_scale=[OKABE_ITO["vermillion"], OKABE_ITO["blau"]],
         zmin=0, zmax=1,
         aspect="auto",
     )
@@ -408,8 +448,8 @@ elif page == "Preisabweichungen":
         fig_spread = go.Figure()
         fig_spread.add_trace(go.Scatter(
             x=spread.index, y=spread,
-            fill="tozeroy", fillcolor="rgba(255, 100, 100, 0.3)",
-            line=dict(color="coral", width=1),
+            fill="tozeroy", fillcolor=hex_to_rgba(OKABE_ITO["orange"], 0.3),
+            line=dict(color=OKABE_ITO["orange"], width=1),
             name="Spread",
         ))
         fig_spread.update_layout(height=300, yaxis_title="Spread (absolut)", hovermode="x unified")
@@ -452,7 +492,7 @@ elif page == "Preisabweichungen":
             min_val = min(pair_data[f"{src_a}_{col_type}"].min(), pair_data[f"{src_b}_{col_type}"].min())
             max_val = max(pair_data[f"{src_a}_{col_type}"].max(), pair_data[f"{src_b}_{col_type}"].max())
             fig_scatter.add_trace(go.Scatter(x=[min_val, max_val], y=[min_val, max_val],
-                                             mode="lines", line=dict(color="red", dash="dash"), name="Diagonale"))
+                                             mode="lines", line=dict(color=OKABE_ITO["vermillion"], dash="dash"), name="Diagonale"))
             fig_scatter.update_layout(height=350)
             st.plotly_chart(fig_scatter, use_container_width=True)
 
@@ -524,7 +564,7 @@ elif page == "Ölpreise":
                 fill="tozeroy", fillcolor="rgba(100, 150, 255, 0.3)",
                 line=dict(color="steelblue", width=1), name="Spread",
             ))
-            fig_spread.add_hline(y=spread_df["Spread"].mean(), line_dash="dash", line_color="red",
+            fig_spread.add_hline(y=spread_df["Spread"].mean(), line_dash="dash", line_color=OKABE_ITO["vermillion"],
                                  annotation_text=f"Mittelwert: ${spread_df['Spread'].mean():.2f}")
             fig_spread.update_layout(height=300, yaxis_title="Spread (USD)", hovermode="x unified")
             st.plotly_chart(fig_spread, use_container_width=True)
@@ -535,13 +575,10 @@ elif page == "Ölpreise":
         for ticker in OIL_TICKERS:
             if ticker in oil_data:
                 all_close[OIL_LABELS[ticker]] = oil_data[ticker]["close"]
+        # Bereits gecachte Rohdaten wiederverwenden statt die CSVs erneut zu lesen
         for pair in PAIRS:
-            files = sorted(glob.glob(os.path.join(DATA_DIR, "raw", "forex", "yahoo", f"{pair}_*.csv")))
-            if files:
-                df_fx = pd.read_csv(files[-1], index_col=0, parse_dates=True)
-                df_fx.index = pd.to_datetime(df_fx.index, utc=True).tz_localize(None).ceil("D")
-                df_fx = df_fx[~df_fx.index.duplicated(keep="first")]
-                df_fx = df_fx.rename(columns=str.lower)
+            df_fx = raw_data.get(pair, {}).get("yahoo")
+            if df_fx is not None and "close" in df_fx.columns:
                 all_close[PAIR_LABELS[pair]] = df_fx["close"]
 
         all_close = all_close.dropna()
@@ -702,16 +739,16 @@ elif page == "Sentiment-Vergleich":
         fig_daily = go.Figure()
         fig_daily.add_trace(go.Scatter(
             x=daily.index, y=daily["eodhd_polarity"],
-            name="EODHD (vorberechnet)", line=dict(color="orange", width=1),
+            name="EODHD (vorberechnet)", line=dict(color=OKABE_ITO["orange"], width=1),
         ))
         fig_daily.add_trace(go.Scatter(
             x=daily.index, y=daily["textblob_polarity"],
-            name="TextBlob (eigene Analyse)", line=dict(color="royalblue", width=1),
+            name="TextBlob (eigene Analyse)", line=dict(color=OKABE_ITO["blau"], width=1),
         ))
         fig_daily.add_hline(y=0, line_dash="dash", line_color="grey", line_width=0.5)
         fig_daily.update_layout(
             height=450,
-            title=f"{PAIR_LABELS[pair]} – Tägliche Polarity ({agg_func})",
+            title=f"{PAIR_LABELS[pair]} - Tägliche Polarity ({agg_func})",
             yaxis_title="Polarity",
             hovermode="x unified",
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
@@ -729,10 +766,10 @@ elif page == "Sentiment-Vergleich":
             scatter_df, x="polarity", y="tb_combined",
             opacity=0.1,
             labels={"polarity": "EODHD Polarity", "tb_combined": "TextBlob Polarity"},
-            title=f"{PAIR_LABELS[pair]} – Artikel-Sentiment (n={len(scatter_df)})",
+            title=f"{PAIR_LABELS[pair]} - Artikel-Sentiment (n={len(scatter_df)})",
         )
         fig_scatter.add_shape(type="line", x0=-1, y0=-1, x1=1, y1=1,
-                              line=dict(color="red", dash="dash", width=1))
+                              line=dict(color=OKABE_ITO["vermillion"], dash="dash", width=1))
         fig_scatter.update_layout(height=500)
         st.plotly_chart(fig_scatter, use_container_width=True)
 
@@ -741,11 +778,11 @@ elif page == "Sentiment-Vergleich":
         col1, col2 = st.columns(2)
         with col1:
             fig_hist_e = px.histogram(scatter_df, x="polarity", nbins=50,
-                                      title="EODHD (vorberechnet)", color_discrete_sequence=["orange"])
+                                      title="EODHD (vorberechnet)", color_discrete_sequence=[OKABE_ITO["orange"]])
             st.plotly_chart(fig_hist_e, use_container_width=True)
         with col2:
             fig_hist_t = px.histogram(scatter_df, x="tb_combined", nbins=50,
-                                      title="TextBlob (eigene Analyse)", color_discrete_sequence=["royalblue"])
+                                      title="TextBlob (eigene Analyse)", color_discrete_sequence=[OKABE_ITO["blau"]])
             st.plotly_chart(fig_hist_t, use_container_width=True)
 
         # --- Statistik ---
@@ -755,6 +792,187 @@ elif page == "Sentiment-Vergleich":
             "TextBlob": scatter_df["tb_combined"].describe(),
         }).round(4)
         st.dataframe(stats, use_container_width=True)
+
+# ---------------------------------------------------------------------------
+# Page: Lead/Lag-Analyse
+# ---------------------------------------------------------------------------
+elif page == "Lead/Lag-Analyse":
+    st.title("Lead/Lag-Analyse: Sentiment vs. Kursrenditen")
+    st.caption(
+        "Kernanalyse des Projekts: Hat das News-Sentiment einen Einfluss auf die "
+        "Wechselkurse, und mit welcher zeitlichen Verzögerung? Die Kurven werden mit "
+        "derselben Logik wie im Notebook sentiment_kurs_lead_lag_analyse.ipynb berechnet "
+        "(Tagesmedian-Sentiment vs. Log-Renditen des Quellen-Mittelwerts, Kalendertage)."
+    )
+
+    # ----- Steuerelemente -----
+    col_a, col_b, col_c = st.columns([2, 1, 1])
+    with col_a:
+        sent_way = st.radio(
+            "Sentiment-Quelle",
+            ["EODHD (Hauptpfad)", "Webscraping TextBlob (Proof of Concept)"],
+            horizontal=True,
+            key="ll_way",
+        )
+    with col_b:
+        max_lag = st.slider("Max. Verschiebung (Kalendertage)", 5, 15, 10, key="ll_maxlag")
+    with col_c:
+        interp_ll = st.checkbox(
+            "Renditen interpolieren",
+            value=False,
+            help="Füllt Wochenend-Lücken in den Kursrenditen linear auf. Das Sentiment wird nie interpoliert.",
+            key="ll_interp",
+        )
+
+    way_key = "clean" if sent_way.startswith("EODHD") else "dirty"
+
+    @st.cache_data
+    def compute_lead_lag_curves(way: str, interpolate: bool, lag_max: int):
+        """Kreuzkorrelation corr(Sentiment_t, Rendite_{t+k}) je Paar und Lag k.
+
+        Spiegelt scripts/regenerate_lead_lag_results.py: close_mean über die
+        ausgerichteten Quellen, Log-Renditen, Reindex auf Kalendertage,
+        Sentiment-Tagesmedian. k > 0 heisst: Sentiment läuft dem Kurs voraus.
+        """
+        close_cols = [c for c in ["yahoo_close", "eodhd_close", "metatrader_close"] if c in df_combined.columns]
+        fx = df_combined.copy()
+        fx.index = fx.index.normalize()
+        fx["close_mean"] = fx[close_cols].mean(axis=1, skipna=True)
+        tmp = fx.reset_index()
+        date_col = tmp.columns[0]
+        close_wide = tmp.pivot_table(index=date_col, columns="pair", values="close_mean").sort_index()
+        returns = np.log(close_wide).diff()
+
+        full_idx = pd.date_range(returns.index.min(), returns.index.max(), freq="D")
+        curves = {}
+        for p in PAIRS:
+            if p not in returns.columns:
+                continue
+            # Sentiment-Tagesreihe
+            if way == "clean":
+                df_n = news_eodhd.get(p)
+                if df_n is None or df_n.empty or "polarity" not in df_n.columns:
+                    continue
+                sent = df_n.dropna(subset=["polarity"]).groupby("date_only")["polarity"].median()
+            else:
+                if webscraping_sent_daily.empty or "polarity_median" not in webscraping_sent_daily.columns:
+                    continue
+                sent = webscraping_sent_daily["polarity_median"].copy()
+            sent.index = pd.to_datetime(sent.index)
+
+            r = returns[p].reindex(full_idx)
+            if interpolate:
+                r = r.interpolate(method="time")
+            s = sent.reindex(full_idx)
+
+            rows = []
+            for k in range(-lag_max, lag_max + 1):
+                aligned = pd.concat([s, r.shift(-k)], axis=1).dropna()
+                corr = aligned.iloc[:, 0].corr(aligned.iloc[:, 1]) if len(aligned) >= 5 else np.nan
+                rows.append({"lag": k, "corr": corr, "n": len(aligned)})
+            curves[p] = pd.DataFrame(rows)
+        return curves
+
+    curves = compute_lead_lag_curves(way_key, interp_ll, max_lag)
+
+    if not curves or all(c["corr"].dropna().empty for c in curves.values()):
+        st.warning(
+            "Keine berechenbaren Kreuzkorrelationen für diese Auswahl. "
+            "Für den Proof-of-Concept-Pfad muss data/processed/news/webscraping_sentiment_daily.csv vorhanden sein."
+        )
+    else:
+        show_band = st.checkbox("Konfidenzband (±1.96/sqrt(n)) anzeigen", value=True, key="ll_band")
+
+        fig_ll = go.Figure()
+        for p, cc in curves.items():
+            if cc["corr"].dropna().empty:
+                continue
+            color = PAIR_COLORS[p]
+            if show_band:
+                band = 1.96 / np.sqrt(cc["n"].clip(lower=1))
+                fig_ll.add_trace(go.Scatter(
+                    x=cc["lag"], y=band, mode="lines", line=dict(width=0),
+                    showlegend=False, hoverinfo="skip",
+                ))
+                fig_ll.add_trace(go.Scatter(
+                    x=cc["lag"], y=-band, mode="lines", line=dict(width=0),
+                    fill="tonexty", fillcolor=hex_to_rgba(color, 0.12),
+                    showlegend=False, hoverinfo="skip",
+                ))
+            fig_ll.add_trace(go.Scatter(
+                x=cc["lag"], y=cc["corr"],
+                name=PAIR_LABELS[p], mode="lines+markers",
+                line=dict(color=color, width=2),
+            ))
+        fig_ll.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5)
+        fig_ll.add_vline(x=0, line_dash="dot", line_color="grey", opacity=0.5)
+        fig_ll.update_layout(
+            height=480,
+            title=f"Kreuzkorrelation Sentiment vs. Rendite ({sent_way})",
+            xaxis_title="Verschiebung k in Kalendertagen (k > 0: Sentiment läuft voraus)",
+            yaxis_title="Pearson-Korrelation",
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig_ll, use_container_width=True)
+
+        st.markdown(
+            "**Lesehilfe:** Bei Verschiebung k wird das Sentiment von Tag t mit der "
+            "Kursrendite von Tag t+k verglichen. Positive Verschiebung bedeutet, dass das "
+            "Sentiment dem Kurs vorausläuft; negative Verschiebung bedeutet, dass der Kurs "
+            "dem Sentiment vorausläuft. Liegt das Maximum bei Verschiebung 0, bewegen sich "
+            "Sentiment und Kurs gleichzeitig. Werte ausserhalb des schattierten Bands "
+            "(±1.96/sqrt(n)) sind auf dem 5-Prozent-Niveau von Null verschieden."
+        )
+        st.caption(
+            "Hinweis: Für EUR/CHF liefert EODHD praktisch keine News (rund 12 Artikel), "
+            "die Kurve dieses Paars ist daher nicht aussagekräftig."
+        )
+
+    # ----- Zusammenfassung aus lead_lag_results.csv -----
+    st.subheader("Zusammenfassung aus dem Analyse-Notebook")
+    if lead_lag_summary.empty:
+        st.info(
+            "data/processed/news/lead_lag_results.csv fehlt. Einmalig "
+            "python scripts/regenerate_lead_lag_results.py ausführen."
+        )
+    else:
+        summary = lead_lag_summary.copy()
+        summary["pair"] = summary["pair"].map(PAIR_LABELS).fillna(summary["pair"])
+        summary["way"] = summary["way"].map({"clean": "EODHD (Hauptpfad)", "dirty": "Webscraping (PoC)"})
+        summary["interpolation"] = summary["interpolation"].map({True: "ja", False: "nein"})
+        summary = summary.rename(columns={
+            "pair": "Paar",
+            "way": "Sentiment-Quelle",
+            "interpolation": "Interpolation",
+            "best_lag": "Bestes Lag (Tage)",
+            "max_abs_corr": "Max. Korrelation",
+            "corr_at_lag_0": "Korrelation bei Lag 0",
+            "n_median": "n (Median)",
+            "band_95": "95%-Band",
+        })
+        st.dataframe(summary, use_container_width=True, hide_index=True)
+        st.caption(
+            "Für EUR/USD und GBP/USD liegt das betragsmässige Maximum im Hauptpfad bei "
+            "Verschiebung 0 und ausserhalb des 95%-Bands: Sentiment und Kurs bewegen sich "
+            "gleichzeitig, ein stabiler zeitlicher Vorlauf ist nicht erkennbar."
+        )
+
+    # ----- Granger-Kausalität (statische Ergebnisse aus dem Bericht) -----
+    st.subheader("Granger-Test: Sentiment als Prädiktor der Kursrendite")
+    granger_df = pd.DataFrame({
+        "Lag (Tage)": [1, 2, 3, 4, 5],
+        "EUR/USD p-Wert (Sentiment auf Kurs)": ["0.001", "0.000", "0.001", "0.001", "0.002"],
+        "GBP/USD p-Wert (Sentiment auf Kurs)": ["0.000", "0.000", "0.000", "0.000", "0.000"],
+    })
+    st.dataframe(granger_df, use_container_width=True, hide_index=True)
+    st.markdown(
+        "Alle p-Werte liegen unter 0.01: Das Sentiment verbessert die Vorhersage der "
+        "Kursrendite bei EUR/USD und GBP/USD für Lags von 1 bis 5 Tagen signifikant. "
+        "Die Gegenrichtung (Kurs als Prädiktor des Sentiments) ist bei GBP/USD nicht "
+        "signifikant (p > 0.29). Die Werte stammen aus Sektion 6 des Notebooks "
+        "sentiment_kurs_lead_lag_analyse.ipynb und sind im Bericht Kapitel 9.4 dokumentiert."
+    )
 
 # ---------------------------------------------------------------------------
 # Page: Eigene Grafik
@@ -821,7 +1039,7 @@ elif page == "Eigene Grafik":
             returns = pair_data[f"{source}_{col_type}"].pct_change().dropna()
             fig.add_trace(go.Scatter(x=returns.index, y=returns, name=source.capitalize(), mode="lines",
                                      line=dict(width=0.8)))
-        fig.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.3)
+        fig.add_hline(y=0, line_dash="dash", line_color=OKABE_ITO["vermillion"], opacity=0.3)
         fig.update_layout(height=500, title=f"{PAIR_LABELS[pair]} - Tägliche Renditen", yaxis_title="Rendite",
                           hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
@@ -1051,7 +1269,7 @@ elif page == "Master Grafik":
                 series_category[label] = "sentiment"
 
     if not series_dict:
-        st.warning("Keine Reihen ausgewählt – bitte mindestens ein Paar oder einen Ölpreis wählen.")
+        st.warning("Keine Reihen ausgewählt, bitte mindestens ein Paar oder einen Ölpreis wählen.")
         st.stop()
 
     df_master = pd.concat(series_dict, axis=1).sort_index()
@@ -1092,9 +1310,9 @@ elif page == "Master Grafik":
     # damit Reihen mit sehr unterschiedlichen Skalen (z.B. EUR/USD ~1.3 vs. Brent ~80 vs. Sentiment ~0.1)
     # alle gut sichtbar bleiben.
     CATEGORY_INFO = {
-        "forex":     {"title": f"Forex-Kurs ({fx_field})", "color": "#1f77b4", "dash": "solid"},
-        "oil":       {"title": "Öl (USD)",                 "color": "#2ca02c", "dash": "solid"},
-        "sentiment": {"title": "Sentiment (polarity)",     "color": "#d62728", "dash": "dot"},
+        "forex":     {"title": f"Forex-Kurs ({fx_field})", "color": OKABE_ITO["blau"], "dash": "solid"},
+        "oil":       {"title": "Öl (USD)",                 "color": OKABE_ITO["orange"], "dash": "solid"},
+        "sentiment": {"title": "Sentiment (polarity)",     "color": OKABE_ITO["vermillion"], "dash": "dot"},
     }
 
     fig = go.Figure()
@@ -1192,7 +1410,7 @@ elif page == "Master Grafik":
 # Page: Master Grafik 2 — Proof of Concept: Webscraping-News + eigene Sentiment-Analyse
 # ---------------------------------------------------------------------------
 elif page == "Master Grafik 2":
-    st.title("Master Grafik 2 — Proof of Concept")
+    st.title("Master Grafik 2: Proof of Concept")
     st.caption(
         "Gleiche Methodik wie Master Grafik 1, aber mit **Webscraping-News** (RSS + Reddit) "
         "und **eigener TextBlob-Sentiment-Analyse** statt EODHD. Forex/Öl bleiben identisch "
@@ -1203,7 +1421,7 @@ elif page == "Master Grafik 2":
     if webscraping_sent_daily.empty:
         st.warning(
             "Aggregiertes Webscraping-Sentiment fehlt. Bitte einmalig "
-            "`python scripts/regenerate_webscraping_sentiment.py` ausführen — das erzeugt "
+            "`python scripts/regenerate_webscraping_sentiment.py` ausführen, das erzeugt "
             "`data/processed/news/webscraping_sentiment_daily.csv`."
         )
         st.stop()
@@ -1349,7 +1567,7 @@ elif page == "Master Grafik 2":
             series_category2[label] = "sentiment"
 
     if not series_dict2:
-        st.warning("Keine Reihen verfügbar – bitte mindestens ein Paar, Öl oder Sentiment aktivieren.")
+        st.warning("Keine Reihen verfügbar, bitte mindestens ein Paar, Öl oder Sentiment aktivieren.")
         st.stop()
 
     df_master2 = pd.concat(series_dict2, axis=1).sort_index()
@@ -1380,8 +1598,8 @@ elif page == "Master Grafik 2":
         overlap = df_master2[fx_cols + sn_cols].dropna(how="any")
         if overlap.empty:
             st.info(
-                "Forex und Webscraping-Sentiment haben im gewählten Zeitraum keine gemeinsamen Tage — "
-                "Korrelation ist nicht berechenbar. Zeitraum anpassen oder Woche/Monat als Aggregation wählen."
+                "Forex und Webscraping-Sentiment haben im gewählten Zeitraum keine gemeinsamen Tage, "
+                "die Korrelation ist nicht berechenbar. Zeitraum anpassen oder Woche/Monat als Aggregation wählen."
             )
         else:
             st.caption(f"Gemeinsame Tage Forex ↔ Sentiment: **{len(overlap)}**")
@@ -1404,9 +1622,9 @@ elif page == "Master Grafik 2":
 
     # ----- Plot mit separaten Y-Achsen pro Kategorie -----
     CATEGORY_INFO2 = {
-        "forex":     {"title": f"Forex-Kurs ({fx_field2})",        "color": "#1f77b4", "dash": "solid"},
-        "oil":       {"title": "Öl (USD)",                          "color": "#2ca02c", "dash": "solid"},
-        "sentiment": {"title": "TextBlob-Polarity (Webscraping)",   "color": "#d62728", "dash": "dot"},
+        "forex":     {"title": f"Forex-Kurs ({fx_field2})",        "color": OKABE_ITO["blau"], "dash": "solid"},
+        "oil":       {"title": "Öl (USD)",                          "color": OKABE_ITO["orange"], "dash": "solid"},
+        "sentiment": {"title": "TextBlob-Polarity (Webscraping)",   "color": OKABE_ITO["vermillion"], "dash": "dot"},
     }
 
     fig2 = go.Figure()
@@ -1612,12 +1830,12 @@ elif page == "Workflow":
     st.subheader("Erläuterung zur Pipeline")
     st.markdown(
         """
-- **Schicht 1 (Rohdatenquellen)** — externe APIs und manuelle Exporte. Nie verändert.
-- **Schicht 2 (Loader)** — Python-Scripts in `src/data_loading/`. Säubern (Zeitzonen, Spaltennamen), deduplizieren, schreiben Rohdaten als CSV/JSON in `data/raw/`.
-- **Schicht 3 (Rohdaten-Storage)** — nach Quelle strukturierte Ordner mit Stand-Datum im Dateinamen, damit reproduzierbar.
-- **Schicht 4 (Processing)** — idempotente Reprozessierung: Forex-Kombination, Deduplikation der Webscraping-News auf `link`, TextBlob-Sentiment, Tages-Median. Parallel als Notebook (ausführbare Doku) und Script (reproduzierbar ohne Jupyter).
-- **Schicht 5 (Processed-Storage)** — harmonisierte, vergleichbare Datentabellen in `data/processed/`.
-- **Schicht 6 (Dashboard)** — interaktive Visualisierung. `Master Grafik 1` = sauberer Weg mit EODHD-Sentiment; `Master Grafik 2` = Proof of Concept mit eigener TextBlob-Analyse auf Webscraping-Texten. Beide nutzen **dieselben** Forex- und Öl-Daten.
+- **Schicht 1 (Rohdatenquellen)**: externe APIs und manuelle Exporte. Nie verändert.
+- **Schicht 2 (Loader)**: Python-Scripts in `src/data_loading/`. Säubern (Zeitzonen, Spaltennamen), deduplizieren, schreiben Rohdaten als CSV/JSON in `data/raw/`.
+- **Schicht 3 (Rohdaten-Storage)**: nach Quelle strukturierte Ordner mit Stand-Datum im Dateinamen, damit reproduzierbar.
+- **Schicht 4 (Processing)**: idempotente Reprozessierung: Forex-Kombination, Deduplikation der Webscraping-News auf `link`, TextBlob-Sentiment, Tages-Median. Parallel als Notebook (ausführbare Doku) und Script (reproduzierbar ohne Jupyter).
+- **Schicht 5 (Processed-Storage)**: harmonisierte, vergleichbare Datentabellen in `data/processed/`.
+- **Schicht 6 (Dashboard)**: interaktive Visualisierung. `Master Grafik 1` = sauberer Weg mit EODHD-Sentiment; `Master Grafik 2` = Proof of Concept mit eigener TextBlob-Analyse auf Webscraping-Texten. Beide nutzen **dieselben** Forex- und Öl-Daten.
 - **Doku** (`DOKUMENTATION.md` + `.docx`) beschreibt Entscheidungen, Methoden und Grenzen; ausführbare Pipeline-Teile werden im Protokoll-Abschnitt referenziert.
 
 Der zentrale Architekturentscheid: **Kein Schritt ist destruktiv.** Jede Ebene kann aus der darunter liegenden neu erzeugt werden. So bleibt die Pipeline nachvollziehbar und reproduzierbar.

@@ -30,3 +30,7 @@ streamlit>=1.45.0
 
 # Statistische Tests
 statsmodels
+
+# Bericht- und Notebook-Build (scripts/build_report_docx.py, scripts/generate_lead_lag_notebook.py)
+python-docx
+nbformat

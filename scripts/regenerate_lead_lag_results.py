@@ -22,7 +22,7 @@ PAIRS = ["EUR_USD", "EUR_CHF", "GBP_USD"]
 PAIR_SYMBOL = {"EUR_USD": "EURUSD.FOREX", "EUR_CHF": "EURCHF.FOREX", "GBP_USD": "GBPUSD.FOREX"}
 CLOSE_COLS = ["yahoo_close", "eodhd_close", "metatrader_close"]
 
-# --- Forex: Mittel ueber Quellen, Wide-Format, Log-Returns -------------------
+# --- Forex: Mittel über Quellen, Wide-Format, Log-Returns -------------------
 forex_long = pd.read_csv(DATA / "processed/forex/forex_alle_quellen_kombiniert.csv",
                          parse_dates=["date"]).set_index("date")
 forex_long.index = forex_long.index.normalize()
@@ -119,3 +119,24 @@ out = DATA / "processed/news/lead_lag_results.csv"
 results.to_csv(out, index=False)
 print("Geschrieben:", out)
 print(results.to_string(index=False))
+
+# --- Granger-Test (identische Logik wie Lead/Lag-Notebook Sektion 6) --------
+# Schreibt die p-Werte reproduzierbar nach granger_results.csv, damit die im
+# Bericht (Tabelle 9) und Dashboard zitierten Werte nicht nur hartcodiert sind.
+from statsmodels.tsa.stattools import grangercausalitytests
+
+granger_rows = []
+for pair in ["EUR_USD", "GBP_USD"]:
+    df = assemble(pair, "clean", interpolate=False).dropna()
+    for direction, cols in [("sentiment_to_return", ["return", "sentiment"]),
+                            ("return_to_sentiment", ["sentiment", "return"])]:
+        res = grangercausalitytests(df[cols], maxlag=5, verbose=False)
+        for lag, r in res.items():
+            granger_rows.append({"pair": pair, "direction": direction, "lag": lag,
+                                 "p_value": round(float(r[0]["ssr_ftest"][1]), 4), "n": len(df)})
+
+granger = pd.DataFrame(granger_rows)
+gout = DATA / "processed/news/granger_results.csv"
+granger.to_csv(gout, index=False)
+print("\nGeschrieben:", gout)
+print(granger.to_string(index=False))

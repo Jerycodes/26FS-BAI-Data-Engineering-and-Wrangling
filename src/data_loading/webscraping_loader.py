@@ -5,7 +5,7 @@ Hinweis zum SSL-Fix: `feedparser.parse(url)` nutzt intern Python's ssl/urllib un
 schlägt auf manchen macOS-Installationen mit `CERTIFICATE_VERIFY_FAILED` fehl
 (keine Artikel). Wir holen den Feed daher vorher mit `requests` (nutzt certifi)
 und geben den Text an `feedparser.parse()`. Diese Methode wurde in
-`notebooks/04_eda_news_webscraping_fenlin.ipynb` validiert.
+`notebooks/_archiv/04_eda_news_webscraping_fenlin.ipynb` validiert.
 
 Investing.com wird nicht mehr versucht (liefert konsistent HTTP 403).
 """
@@ -16,7 +16,7 @@ import feedparser
 import pandas as pd
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 HEADERS = {
@@ -96,7 +96,9 @@ def scrape_reddit(subreddit: str, sort: str = 'hot', limit: int = 100) -> list[d
                 'source': f'Reddit_r/{subreddit}',
                 'title': p.get('title', ''),
                 'link': f'https://www.reddit.com{p.get("permalink", "")}',
-                'published': datetime.fromtimestamp(p.get('created_utc', 0)).isoformat(),
+                # created_utc ist ein UTC-Epoch: explizit als UTC interpretieren,
+                # sonst entsteht lokale Wanduhrzeit und der Tag kann kippen.
+                'published': datetime.fromtimestamp(p.get('created_utc', 0), tz=timezone.utc).isoformat(),
                 'summary': p.get('selftext', '')[:500],
             })
         print(f"  -> {len(posts)} Posts")
