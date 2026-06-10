@@ -464,14 +464,14 @@ for pair in ["EUR_USD", "GBP_USD"]:
     pw = forex_close[pair].resample("W-FRI").last().dropna()
     sw = sentiment_eodhd[pair].resample("W-FRI").median().reindex(pw.index)
     fig, ax1 = plt.subplots(figsize=(9, 4.2))
-    ax1.plot(pw.index, pw.values, color="#1f77b4", lw=1.6)
-    ax1.set_ylabel("Kursniveau (Wochenschluss)", color="#1f77b4")
-    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.plot(pw.index, pw.values, color="#333333", lw=1.6)
+    ax1.set_ylabel("Kursniveau (Wochenschluss)", color="#333333")
+    ax1.tick_params(axis="y", labelcolor="#333333")
     ax2 = ax1.twinx()
     ax2.axhline(0, color="grey", ls=":", lw=0.8)
     ax2.bar(sw.index, sw.values, width=5,
-            color=np.where(sw.values >= 0, "#2ca02c", "#d62728"), alpha=0.5)
-    ax2.set_ylabel("Wochen-Sentiment (gruen positiv, rot negativ)")
+            color=np.where(sw.values >= 0, "#0072B2", "#D55E00"), alpha=0.6)
+    ax2.set_ylabel("Wochen-Sentiment (blau positiv, orange negativ)")
     ax2.grid(False)
     ax1.set_title(f"{PAIR_LABELS[pair]}: Kursniveau und Nachrichten-Sentiment je Woche")
     fig.tight_layout()
@@ -484,7 +484,7 @@ cells.append(code(r"""
 fig, ax = plt.subplots(figsize=(8, 4.2))
 ks = list(range(0, 5))
 width = 0.35
-for i, (pair, color) in enumerate([("EUR_USD", "#1f77b4"), ("GBP_USD", "#d62728")]):
+for i, (pair, color) in enumerate([("EUR_USD", "#0072B2"), ("GBP_USD", "#E69F00")]):
     pw = forex_close[pair].resample("W-FRI").last()
     sw = sentiment_eodhd[pair].resample("W-FRI").median()
     vals = []
@@ -505,38 +505,35 @@ fig.savefig(FIGDIR / "fig_forward_weeks.png", dpi=150)
 plt.show()
 """))
 
-# Granger Stub ---------------------------------------------------------------
+# Granger-Test ---------------------------------------------------------------
 cells.append(md(r"""
-## 6. Granger-Causality (optional, aktuell deaktiviert)
+## 6. Granger-Test (formaler Vorhersagetest)
 
-Der Granger-Test prüft formell, ob die *Vergangenheit* einer Reihe X die
-Vorhersage von Y verbessert — über das hinaus, was Ys eigene Vergangenheit
-schon leistet. Das wäre ein striktererer Test als die einfache Cross-Korrelation.
+Der Granger-Test prüft formell, ob die *Vergangenheit* des Sentiments die
+Vorhersage der Rendite verbessert — über das hinaus, was die eigene Vergangenheit
+der Rendite schon leistet. Das ist ein strikterer Test als die einfache
+Cross-Korrelation. Das Paket `statsmodels` ist in `requirements.txt` enthalten.
 
-Granger benötigt das Paket `statsmodels`, das aktuell **nicht** in
-`requirements.txt` steht. Falls ihr den Test nachrüsten wollt:
-
-```
-pip install statsmodels
-```
-
-Anschliessend die Cell unten ausführen. **Wichtig:** Granger-Causality testet
-*lineare Vorhersagbarkeit*, nicht echte Kausalität — d.h. das Ergebnis bleibt
-eine statistische Aussage über Zeitreihen-Reihenfolge, kein kausaler Beleg.
+Wir testen beide Richtungen und beide Paare. **Wichtig:** Granger testet
+*lineare Vorhersagbarkeit*, nicht echte Kausalität. Bei rund 1100 Beobachtungen
+werden zudem schon sehr kleine Effekte signifikant — ein kleiner p-Wert belegt
+also einen Vorhersagebeitrag, nicht dessen praktische Grösse.
 """))
 
 cells.append(code(r"""
-# Aktiviere bei Bedarf: pip install statsmodels
-try:
-    from statsmodels.tsa.stattools import grangercausalitytests
-    df = assemble_clean("EUR_USD", interpolate=False).dropna()
-    print("Granger: Sentiment Granger-causes Return? (1..5 Lags)")
+from statsmodels.tsa.stattools import grangercausalitytests
+
+for pair in ["EUR_USD", "GBP_USD"]:
+    df = assemble_clean(pair, interpolate=False).dropna()
+    print(f"\n{pair} (n={len(df)})")
+    print("  Sentiment -> Rendite (p<0.05 = Vorhersagebeitrag):")
     res = grangercausalitytests(df[["return", "sentiment"]], maxlag=5, verbose=False)
     for lag, r in res.items():
-        p = r[0]["ssr_ftest"][1]
-        print(f"  Lag {lag}: p-Wert = {p:.4f}")
-except ImportError:
-    print("statsmodels nicht installiert — Granger-Test übersprungen.")
+        print(f"    Lag {lag}: p = {r[0]['ssr_ftest'][1]:.3f}")
+    print("  Gegenrichtung Rendite -> Sentiment:")
+    res2 = grangercausalitytests(df[["sentiment", "return"]], maxlag=5, verbose=False)
+    for lag, r in res2.items():
+        print(f"    Lag {lag}: p = {r[0]['ssr_ftest'][1]:.3f}")
 """))
 
 # Resultat-Tabelle ----------------------------------------------------------

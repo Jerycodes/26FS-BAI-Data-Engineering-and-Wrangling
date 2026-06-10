@@ -46,7 +46,8 @@ TABLE_LIST = [
     "Tabelle 4: Zusammenhang am selben Tag mit und ohne Interpolation",
     "Tabelle 5: Stärkster Zusammenhang je Wechselkurs auf Tagesebene",
     "Tabelle 6: Sentiment einer Woche und Kursbewegung in den Folgewochen",
-    "Tabelle 7: Glossar der wichtigsten Begriffe",
+    "Tabelle 7: Granger-Test, p-Werte für den Vorhersagebeitrag des Sentiments",
+    "Tabelle 8: Glossar der wichtigsten Begriffe",
 ]
 
 
@@ -670,7 +671,37 @@ def build():
               "Sentiment einer Woche die spätere Kursbewegung nicht voraus. Stimmung und Kurs bewegen sich "
               "gemeinsam in derselben Periode.")
 
-    h2(doc, "9.4 Warum eine reine Kursgrafik einen Vorlauf vermuten lässt")
+    h2(doc, "9.4 Formaler Vorhersagetest (Granger-Test)")
+    para(doc, "Die Korrelation misst den Zusammenhang je Verschiebung einzeln. Ein strengerer, formaler "
+              "Test ist der Granger-Test. Er prüft, ob die Vergangenheit des Sentiments die Vorhersage "
+              "der Kursveränderung verbessert, über das hinaus, was die eigene Vergangenheit der "
+              "Kursveränderung bereits leistet. Ein kleiner Wert (unter 0.05) in der folgenden Tabelle "
+              "bedeutet, dass das Sentiment einen eigenen Vorhersagebeitrag liefert.")
+    add_table(
+        doc, "Tabelle 7: Granger-Test, p-Werte für den Vorhersagebeitrag des Sentiments",
+        ["Verzögerung", "EUR/USD: Sentiment sagt Kurs voraus", "GBP/USD: Sentiment sagt Kurs voraus"],
+        [
+            ["1 Tag", "0.001", "0.000"],
+            ["2 Tage", "0.000", "0.000"],
+            ["3 Tage", "0.001", "0.000"],
+            ["4 Tage", "0.001", "0.000"],
+            ["5 Tage", "0.002", "0.000"],
+        ],
+        widths=[3.5, 5.5, 5.5],
+    )
+    para(doc, "Für beide Wechselkurse ist der Vorhersagebeitrag des Sentiments bei allen getesteten "
+              "Verzögerungen statistisch signifikant. Bei rund 1100 Beobachtungen werden allerdings schon "
+              "sehr kleine Effekte signifikant. Die Stärke dieses Beitrags ist gering, passend zu den "
+              "schwachen Korrelationen bei Verschiebungen grösser null. Das Sentiment trägt also ein "
+              "schwaches, aber messbares Vorhersagesignal, ist für sich genommen jedoch kein praktisch "
+              "brauchbarer Frühindikator.")
+    para(doc, "Aufschlussreich ist die Gegenrichtung. Bei GBP/USD verbessert die Vergangenheit des "
+              "Kurses die Vorhersage des Sentiments nicht (alle Werte über 0.29); der Zusammenhang läuft "
+              "dort also einseitig vom Sentiment zum Kurs. Bei EUR/USD ist der Effekt in beide Richtungen "
+              "schwach signifikant. Da Sentiment und Kurs zudem stark gleichzeitig zusammenhängen, kann "
+              "ein Teil dieses Vorhersagebeitrags indirekt aus dem gleichzeitigen Zusammenhang stammen.")
+
+    h2(doc, "9.5 Warum eine reine Kursgrafik einen Vorlauf vermuten lässt")
     para(doc, "Wenn man Kursniveau und Sentiment beide als Verlauf über die Zeit zeichnet, kann der "
               "Eindruck entstehen, das Sentiment laufe dem Kurs voraus. Dieser Eindruck entsteht, weil "
               "beide Reihen über den langen Zeitraum demselben übergeordneten Trend folgen und sich deshalb "
@@ -679,14 +710,14 @@ def build():
               "wir zusätzlich die Veränderungen und die kumulative Bewegung in den Folgewochen "
               "(Kapitel 9.3), die den scheinbaren Vorlauf nicht bestätigen.")
 
-    h2(doc, "9.5 Ergebnis der eigenen Datenbeschaffung")
+    h2(doc, "9.6 Ergebnis der eigenen Datenbeschaffung")
     para(doc, "Auf den selbst über Webscraping gesammelten Nachrichten zeigt sich kein gesicherter "
               "Zusammenhang. Die stärksten Werte liegen bei wechselnden Verschiebungen, alle nahe oder "
               "innerhalb des Konfidenzbandes, bei nur 85 gemeinsamen Tagen. Das ist angesichts der dünnen "
               "Abdeckung (Kapitel 8.4) zu erwarten. Die eigene Datenbeschaffung lässt sich also vollständig "
               "umsetzen, liefert aufgrund der Datenmenge aber keine belastbare Aussage.")
 
-    h2(doc, "9.6 Öl als möglicher Einflussfaktor")
+    h2(doc, "9.7 Öl als möglicher Einflussfaktor")
     para(doc, "Wir haben zusätzlich die Ölpreise WTI und Brent erhoben, weil der Ölpreis häufig als "
               "Einflussfaktor auf Währungen genannt wird. Abbildung 8 zeigt ihren Verlauf. Um zu prüfen, "
               "ob ein Bezug zu den untersuchten Wechselkursen besteht, haben wir die Tagesveränderungen "
@@ -704,12 +735,17 @@ def build():
     h1(doc, "10. Diskussion und Beantwortung der Frage")
     para(doc, "Die Forschungsfrage war, ob die Stimmung von Finanznachrichten einen Einfluss auf "
               "Wechselkurse hat und mit welcher zeitlichen Verzögerung.")
-    para(doc, "Unsere Antwort: Es besteht ein gesicherter, aber gleichzeitiger Zusammenhang. Bei EUR/USD "
-              "und GBP/USD bewegen sich Sentiment und Kurs in derselben Periode gemeinsam, mit einem "
-              "Zusammenhang von 0.18 beziehungsweise 0.21. Einen Vorlauf des Sentiments, der eine "
-              "Vorhersage erlauben würde, konnten wir nicht feststellen, weder auf Tagesebene noch über das "
-              "Kursniveau in den Folgewochen. Die Hypothese H1 wird damit nicht gestützt, das Ergebnis "
-              "passt zur Alternative A1: Das Sentiment ist eine Begleitinformation, kein Frühindikator.")
+    para(doc, "Unsere Antwort: Der Zusammenhang ist überwiegend gleichzeitig. Bei EUR/USD und GBP/USD "
+              "bewegen sich Sentiment und Kurs in derselben Periode gemeinsam, mit einem Zusammenhang von "
+              "0.18 beziehungsweise 0.21. Das Bild ist damit klar von der Alternative A1 geprägt, der "
+              "gleichzeitigen Bewegung. Einen praktisch nutzbaren Vorlauf konnten wir nicht feststellen, "
+              "weder in der einfachen Korrelation noch über das Kursniveau in den Folgewochen.")
+    para(doc, "Der formale Granger-Test zeigt allerdings eine Feinheit. Die Vergangenheit des Sentiments "
+              "liefert einen statistisch signifikanten, wenn auch sehr kleinen Beitrag zur Vorhersage der "
+              "Kursveränderung, bei GBP/USD sogar einseitig vom Sentiment zum Kurs. Die Hypothese H1 ist "
+              "damit höchstens in einer sehr schwachen Form gestützt: Es gibt ein messbares Vorlaufsignal, "
+              "das aber zu klein ist, um als Frühindikator zu dienen. In der Praxis bleibt das Sentiment "
+              "eine Begleitinformation.")
     para(doc, "Bei dieser Deutung ist wichtig, dass ein Zusammenhang keine Ursache beweist. Selbst der "
               "klare gleichzeitige Zusammenhang zeigt nur, dass Markt und Nachrichten gemeinsam reagieren, "
               "nicht warum. Ein gemeinsamer dritter Faktor, etwa eine Entscheidung einer Notenbank, kann "
@@ -718,14 +754,14 @@ def build():
               "EODHD nicht aus. Die selbst gesammelten Nachrichten waren zu dünn für eine belastbare "
               "Aussage. TextBlob ist für Finanztexte nur eingeschränkt geeignet.")
     para(doc, "Als nächste Schritte bieten sich an: ein spezialisiertes Verfahren zur Sentiment-Messung "
-              "für Finanztexte einzusetzen, um die vielen neutralen Werte zu verringern, sowie ein "
-              "formaler statistischer Test auf Vorhersagekraft, der über die einfache Korrelation "
-              "hinausgeht.")
+              "für Finanztexte einzusetzen, um die vielen neutralen Werte zu verringern, sowie die eigene "
+              "Datenbeschaffung über einen längeren Zeitraum laufen zu lassen, damit auch der selbst "
+              "erstellte Nachrichtenstrom eine belastbare Auswertung erlaubt.")
 
     # =====================================================================
     h1(doc, "Anhang A: Glossar")
     add_table(
-        doc, "Tabelle 7: Glossar der wichtigsten Begriffe",
+        doc, "Tabelle 8: Glossar der wichtigsten Begriffe",
         ["Begriff", "Bedeutung"],
         [
             ["Wechselkurs (Forex)", "Preis einer Währung ausgedrückt in einer anderen, gehandelt am weltweiten Devisenmarkt."],
