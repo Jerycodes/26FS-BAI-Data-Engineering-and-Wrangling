@@ -60,7 +60,7 @@ Idempotente Reprozessierungs- und Build-Scripts, die einen Jupyter-Kernel nicht 
 - **regenerate_webscraping_sentiment.py** — Kombiniert alle `all_scraped_news_*.csv` (ohne `PRE-FIX`), dedupliziert auf `link`, berechnet TextBlob-Polarity auf Titel+Summary, aggregiert auf Tagesmedian. Produziert `data/processed/news/webscraping_articles_sentiment.csv` (Artikel-Level) + `webscraping_sentiment_daily.csv` (Tagesebene). Spiegelt `notebooks/datenverarbeitung/poc_webscraping_sentiment.ipynb` (Sections 1–4 + 7).
 - **generate_lead_lag_notebook.py** — Baut `notebooks/datenverarbeitung/sentiment_kurs_lead_lag_analyse.ipynb` deterministisch neu auf (jeder Run überschreibt manuelle Änderungen am Notebook). Lags zählen **Kalendertage** (Reindex auf `freq="D"`), nicht Handelstage.
 - **regenerate_lead_lag_results.py** — Erzeugt `data/processed/news/lead_lag_results.csv` **headless** (ohne Jupyter-Kernel), 1:1-Logik des Lead/Lag-Notebooks; nutzt `close_mean` über die ausgerichteten Quellen. Nötig, weil `jupyter nbconvert --execute` auf diesem Setup im Kernel hängen kann.
-- **build_documentation_docx.py** — Konvertiert `DOKUMENTATION.md` in `DOKUMENTATION.docx` (Haupt-Abgabe-Dokument). Nutzt `python-docx`, parst `**bold**` / `` `code` `` / Listen / Tabellen / Code-Blöcke / **Bilder** (`![alt](pfad)` → eingebettet, alt-Text als Bildunterschrift).
+- **build_report_docx.py** — Erzeugt den abgabefertigen `DOKUMENTATION.docx` **direkt** mit `python-docx` (kein Markdown). Enthält den Berichtstext als strukturierten Code + Helfer für farbige Tabellen (Hauptpfad/PoC), Seitenumbrüche, Word-Inhaltsverzeichnis und Bild-Einbettung. Stil-Vorgaben des Users beachten (siehe Abschnitt „Documentation & Architektur-Artefakte").
 
 ### Scaffolded but empty modules
 `src/data_cleaning/`, `src/data_transformation/`, `src/pipeline/` — only contain `__init__.py`.
@@ -123,9 +123,8 @@ Within `raw/`:
 
 ## Documentation & Architektur-Artefakte
 
-- **`DOKUMENTATION.md`** — Haupt-Bericht (Sektionen 1–17): Projektziel, Quellen, Pipeline, Missings, Duplikate, Harmonisierung, Transformation, drei Sentiment-Wege, Master Grafik 1+2, Dashboard, Lead/Lag-Resultate, Reproduzierbarkeits-Befehle, Einschränkungen, Projektstruktur, Entscheidungs-Chronologie, ToDos. Bei inhaltlichen Updates immer hier zuerst pflegen — `DOKUMENTATION.docx` ist generiert.
-- **`DOKUMENTATION.docx`** — Generiert via `python scripts/build_documentation_docx.py`. Nicht direkt editieren.
-- **`docs/architektur/`** — Pipeline-Diagramm: `pipeline.gv` (Graphviz-Quelle), `pipeline.png`, `pipeline.svg`. PNG ist in `DOKUMENTATION.md` (Sektion 3) eingebettet.
+- **`DOKUMENTATION.docx`** — Abgabefertiger Haupt-Bericht. Wird **direkt** mit `python scripts/build_report_docx.py` erzeugt (python-docx, KEIN Markdown-Zwischenschritt). Inhalt liegt als strukturierter Python-Code im Builder; dort editieren, NICHT die .docx direkt. Aufbau: Titelseite, Inhaltsverzeichnis (Word-TOC-Feld), Kap. 1 Einleitung, 2 Datengrundlage, 3 Laden, 4 Bereinigung/Qualitätsprüfung (inkl. Datierungsfehler), 5 Harmonisierung, 6 Aufbereitung, 7 Sentiment, 8 Analyse/Ergebnisse, 9 Diskussion, 10 Dashboard, Anhang A Glossar / B Theorie+Quellen / C Reproduzierbarkeit. **Stil-Vorgaben des Users (zwingend):** echte Umlaute (ä/ö/ü, Schweizer „ss" statt „ß"), KEINE En-/Em-Dashes (–/—), KEINE „usw/etc" bei Fakten (Symbole/Filter exakt nennen), keine Sätze wie „der Dozent/die Vorlesung", Theorie nur im Anhang mit Quelle, Hauptpfad vs. Proof-of-Concept farblich getrennt (blau=genutzt, orange=PoC). Die frühere `DOKUMENTATION.md` + `build_documentation_docx.py` sind entfernt (überholt).
+- **`docs/architektur/`** — Pipeline-Diagramm: `pipeline.gv` (Graphviz-Quelle), `pipeline.png`, `pipeline.svg`. PNG ist im Bericht (Kap. 10) eingebettet.
 - **`slides/`** — Unterrichtsslides (W1–W5: Imputation, Harmonisierung, Scraping etc.) als Referenz bei methodischen Entscheidungen.
 
 ## Planned Refactoring

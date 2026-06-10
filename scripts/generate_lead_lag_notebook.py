@@ -444,6 +444,67 @@ ist nicht paar-spezifisch und damit nur bedingt aussagekräftig.
 
 cells.append(code("plot_pair_lead_lag('EUR_CHF')"))
 
+# Bericht-Abbildungen: Wochen-Sicht und Folgewochen --------------------------
+cells.append(md(r"""
+## 5.4 Niveau- und Wochen-Sicht (Abbildungen für den Bericht)
+
+Die folgenden Zellen erzeugen die Abbildungen, die im Bericht die anschauliche
+Frage beantworten: *War das Sentiment in einer Woche negativ, fällt der Kurs in
+den darauffolgenden Wochen?* Sie werden zusätzlich nach `docs/figures/` gespeichert.
+Die Woche ist dabei nur ein Beispiel-Zeithorizont; dieselbe Auswertung lässt sich
+analog auf Tage, zehn Tage oder Monate anwenden.
+"""))
+
+cells.append(code(r"""
+FIGDIR = ROOT / "docs" / "figures"
+FIGDIR.mkdir(parents=True, exist_ok=True)
+
+# Wochen-Ueberlagerung: Kursniveau (Linie) und Sentiment je Woche (Balken)
+for pair in ["EUR_USD", "GBP_USD"]:
+    pw = forex_close[pair].resample("W-FRI").last().dropna()
+    sw = sentiment_eodhd[pair].resample("W-FRI").median().reindex(pw.index)
+    fig, ax1 = plt.subplots(figsize=(9, 4.2))
+    ax1.plot(pw.index, pw.values, color="#1f77b4", lw=1.6)
+    ax1.set_ylabel("Kursniveau (Wochenschluss)", color="#1f77b4")
+    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax2 = ax1.twinx()
+    ax2.axhline(0, color="grey", ls=":", lw=0.8)
+    ax2.bar(sw.index, sw.values, width=5,
+            color=np.where(sw.values >= 0, "#2ca02c", "#d62728"), alpha=0.5)
+    ax2.set_ylabel("Wochen-Sentiment (gruen positiv, rot negativ)")
+    ax2.grid(False)
+    ax1.set_title(f"{PAIR_LABELS[pair]}: Kursniveau und Nachrichten-Sentiment je Woche")
+    fig.tight_layout()
+    fig.savefig(FIGDIR / f"fig_weekly_{pair}.png", dpi=150)
+    plt.show()
+"""))
+
+cells.append(code(r"""
+# Folgewochen: corr(Sentiment Woche t, kumulative Kursbewegung bis Woche t+k)
+fig, ax = plt.subplots(figsize=(8, 4.2))
+ks = list(range(0, 5))
+width = 0.35
+for i, (pair, color) in enumerate([("EUR_USD", "#1f77b4"), ("GBP_USD", "#d62728")]):
+    pw = forex_close[pair].resample("W-FRI").last()
+    sw = sentiment_eodhd[pair].resample("W-FRI").median()
+    vals = []
+    for k in ks:
+        fut = np.log(pw).diff() if k == 0 else np.log(pw).shift(-k) - np.log(pw)
+        aligned = pd.concat([sw, fut], axis=1).dropna()
+        vals.append(aligned.iloc[:, 0].corr(aligned.iloc[:, 1]) if len(aligned) >= 5 else np.nan)
+    ax.bar(np.array(ks) + (i - 0.5) * width, vals, width, color=color, label=PAIR_LABELS[pair])
+    print(pair, [f"k={k}:{v:+.3f}" for k, v in zip(ks, vals)])
+ax.axhline(0, color="black", lw=0.8)
+ax.set_xlabel("Zeithorizont k in Wochen (k=0: selbe Woche, k>0: kumulativ bis Woche t+k)")
+ax.set_ylabel("Korrelation mit dem Sentiment der Woche t")
+ax.set_title("Sagt das Sentiment einer Woche die Kursbewegung der Folgewochen voraus?")
+ax.set_xticks(ks)
+ax.legend()
+fig.tight_layout()
+fig.savefig(FIGDIR / "fig_forward_weeks.png", dpi=150)
+plt.show()
+"""))
+
 # Granger Stub ---------------------------------------------------------------
 cells.append(md(r"""
 ## 6. Granger-Causality (optional, aktuell deaktiviert)
