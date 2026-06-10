@@ -255,7 +255,9 @@ def build():
               "ob sich zwischen der Stimmung in solchen Nachrichten und der Bewegung von Wechselkursen ein "
               "messbarer Zusammenhang zeigt. Betrachtet werden die drei Wechselkurse Euro zu US-Dollar "
               "(EUR/USD), Euro zu Schweizer Franken (EUR/CHF) und Britisches Pfund zu US-Dollar (GBP/USD) "
-              "im Zeitraum vom 1. Januar 2022 bis zum 22. April 2026.")
+              "im Zeitraum vom 3. Januar 2022 bis zum 21. April 2026. Der Zeitraum umfasst damit gut vier "
+              "Jahre und sowohl ruhige als auch unruhige Marktphasen; er beginnt am ersten Handelstag des "
+              "Jahres 2022 und endet am letzten Handelstag, der beim Laden der Daten vollständig vorlag.")
     para(doc, "Der Schwerpunkt der Arbeit liegt auf der Aufbereitung der Daten: aus mehreren, "
               "unterschiedlich aufgebauten Quellen vergleichbare Zeitreihen bauen, Qualitätsprobleme "
               "erkennen und beheben, und jede Entscheidung nachvollziehbar begründen. Die Beantwortung der "
@@ -470,7 +472,8 @@ def build():
               "übersprungen. Eine Woche mit nur zwei statt fünf Nachrichtentagen wird also weiterhin "
               "ausgewertet, eben auf Basis der vorhandenen Tage.")
     h3(doc, "Sonderfall EUR/CHF-Nachrichten")
-    para(doc, "Für EUR/CHF lieferte EODHD nur sehr wenige Artikel (rund 13 im gesamten Zeitraum). Wir "
+    para(doc, "Für EUR/CHF lieferte EODHD nur sehr wenige Artikel (13 im gesamten Zeitraum, davon 12 mit "
+              "Stimmungswert). Wir "
               "vermuten, dass dieses Paar international weniger Medienaufmerksamkeit bekommt. So kam es von "
               "EODHD, und wegen der zu dünnen Grundlage haben wir EUR/CHF in der Sentiment-Analyse nicht "
               "verwendet.")
@@ -493,7 +496,7 @@ def build():
         [
             ["Kurse Yahoo (je Paar)", "1117 Tage, 03.01.2022 bis 21.04.2026",
              "5 Werktage (0.4 Prozent)", "0", "Lücken bleiben leer"],
-            ["Kurse EODHD (drei Paare)", "1412 / 1415 / 1175 Tage",
+            ["Kurse EODHD (drei Paare)", "EUR/USD 1412, GBP/USD 1415, EUR/CHF 1175 Tage",
              "keine fehlenden Werktage, zusätzlich Wochenendwerte", "0",
              "Wochenende nur in den Rohdaten (Kapitel 5.2)"],
             ["Kurse MetaTrader (EUR/USD)", "1037 Tage, bis 26.12.2025",
@@ -509,7 +512,10 @@ def build():
     )
     para(doc, "Die 431 Artikel ohne brauchbares Datum stammen aus Feeds, die kein maschinenlesbares "
               "Veröffentlichungsdatum mitliefern. Sie bleiben im Artikelbestand erhalten, fliessen aber "
-              "nicht in die Auswertung auf Tagesebene ein, weil sie sich keinem Tag zuordnen lassen.")
+              "nicht in die Auswertung auf Tagesebene ein, weil sie sich keinem Tag zuordnen lassen. "
+              "Die unterschiedliche Tageszahl der drei EODHD-Reihen erklärt sich über die Wochenendwerte: "
+              "Bei EUR/CHF liefert EODHD deutlich seltener einen Sonntagswert als bei den beiden anderen "
+              "Paaren, die Werktage sind bei allen drei Paaren vollständig.")
 
     h2(doc, "5.4 Ausreisser")
     para(doc, "Ausreisser sind einzelne Werte, die weit ausserhalb des üblichen Bereichs liegen. Wir "
@@ -536,10 +542,12 @@ def build():
     para(doc, "Mehrere Quellen sind nur dann ein Gewinn, wenn man sie gegeneinander prüft. Wir haben "
               "deshalb getestet, ob sich zwei Anbieter desselben Wechselkurses in ihren Tagesveränderungen "
               "gleichen. Die Tagesveränderung ist der Unterschied des Kurses von einem Tag zum nächsten. "
-              "Stimmen zwei Quellen hier nicht überein, stimmt etwas mit der zeitlichen Zuordnung nicht.")
+              "Als Mass für die Übereinstimmung verwenden wir die Korrelation der Tagesveränderungen "
+              "beider Anbieter: Bei korrekter Datierung muss sie nahe eins liegen. Stimmen zwei Quellen "
+              "hier nicht überein, stimmt etwas mit der zeitlichen Zuordnung nicht.")
     add_table(
         doc, "Tabelle 4: Übereinstimmung von Yahoo und EODHD vor der Korrektur",
-        ["Wechselkurs", "Übereinstimmung am selben Tag", "Mittlere Differenz", "Bewertung"],
+        ["Wechselkurs", "Korrelation der Tagesveränderungen", "Mittlere Differenz", "Bewertung"],
         [
             ["EUR/CHF", "0.92", "rund 2 Pips", "in Ordnung"],
             ["EUR/USD", "0.00", "rund 43 Pips", "fehlerhaft"],
@@ -569,10 +577,18 @@ def build():
               "auseinander, das war ein Datierungsfehler. Nach der Korrektur schrumpft der Unterschied auf "
               "rund 12 beziehungsweise 1 Pip. Abbildung 3 zeigt die Übereinstimmung vor und nach der "
               "Korrektur.")
-    add_figure(doc, FIGDIR / "fig_source_alignment.png", "Abbildung 3: Quellenvergleich vor und nach der Datums-Ausrichtung. Vor der Korrektur stimmen Yahoo und EODHD bei EUR/USD und GBP/USD kaum überein, danach sehr gut.", width=14)
-    para(doc, "Als Nebenbefund war auch MetaTrader bei EUR/USD um einen Tag versetzt. Nach der Korrektur "
-              "stimmt es zu 0.96 mit Yahoo überein, was die Quellen gegenseitig bestätigt. Die Behebung "
-              "beschreibt Kapitel 6.2.")
+    add_figure(doc, FIGDIR / "fig_source_alignment.png", "Abbildung 3: Quellenvergleich vor und nach der Datums-Ausrichtung. Vor der Korrektur stimmen Yahoo und EODHD bei EUR/USD und GBP/USD kaum überein, danach deutlich besser. Die Balken vor der Ausrichtung bei EUR/USD und GBP/USD haben den Wert 0.00 und sind deshalb nicht sichtbar.", width=14)
+    para(doc, "Auch nach der Korrektur bleibt bei EUR/USD eine Restdifferenz: Die Korrelation erreicht "
+              "0.66 statt der 0.89 von GBP/USD, und es verbleiben rund 12 Pips mittlere Differenz. Wir "
+              "führen das auf die beschriebene Stempel-Mischung zurück: Weil Yahoo bei EUR/USD zwischen "
+              "zwei Zeitstempel-Konventionen wechselt, decken sich die Tagesfenster der beiden Anbieter "
+              "auch nach der Verschiebung nicht an jedem Tag exakt, und ein Teil der Tagesbewegung fällt "
+              "beim einen Anbieter auf den Nachbartag. Dass die Abweichung bei EODHD liegt und nicht bei "
+              "Yahoo, zeigt der Vergleich mit der dritten Quelle: MetaTrader, das ebenfalls um einen Tag "
+              "versetzt war, stimmt nach der Korrektur zu 0.96 mit Yahoo überein. Für die kombinierte "
+              "Reihe ist die Restdifferenz vertretbar, weil der Mittelwert über die ausgerichteten "
+              "Quellen diese Rest-Streuung glättet; als offener Punkt ist sie in Kapitel 10 festgehalten. "
+              "Die Behebung des Versatzes beschreibt Kapitel 6.2.")
 
     # =====================================================================
     h1(doc, "6. Harmonisierung")
@@ -594,9 +610,15 @@ def build():
                 "den jeweils richtigen Handelstag gerundet.")
     bullet(doc, "Für jede andere Quelle wird der Versatz zwischen minus zwei und plus zwei Tagen gesucht, "
                 "der die Übereinstimmung der Tagesveränderungen mit Yahoo am grössten macht.")
-    bullet(doc, "Ein Versatz wird nur dann angewendet, wenn er die Übereinstimmung deutlich verbessert. So "
-                "bleibt EUR/CHF unverändert, während EUR/USD und GBP/USD um einen Tag korrigiert werden.")
+    bullet(doc, "Ein Versatz wird nur dann angewendet, wenn er die Übereinstimmung deutlich verbessert, "
+                "nämlich um mindestens 0.15 gegenüber der unverschobenen Variante. So bleibt EUR/CHF "
+                "unverändert, während EUR/USD und GBP/USD um einen Tag korrigiert werden.")
     para(doc, "Erst nach dieser Ausrichtung werden die Quellen zusammengeführt und gemittelt.")
+    para(doc, "Yahoo als zeitliche Referenz zu setzen ist eine Annahme, die wir geprüft haben: Die "
+              "brokernahe, von Yahoo unabhängige Quelle MetaTrader stimmt nach der Ausrichtung zu 0.96 "
+              "mit Yahoo überein (Kapitel 5.5). Die Referenz wird also von einer dritten Quelle "
+              "bestätigt und entsteht nicht allein dadurch, dass wir die anderen Quellen an Yahoo "
+              "anpassen.")
     para(doc, "Eine zusätzliche Qualitätsprüfung bestätigt die MetaTrader-Daten von innen heraus: Wir "
               "haben die 15-Minuten-Daten zu Tageswerten zusammengefasst und mit dem Tages-Export "
               "verglichen. An allen 1037 gemeinsamen Tagen stimmen die Schlusskurse exakt überein, ohne "
@@ -709,9 +731,13 @@ def build():
               "folgenden Zeiträume. Auf Tagesebene betrachten wir Verschiebungen von minus zehn bis plus "
               "zehn Tagen. Als Mass dient die Korrelation, eine Zahl zwischen minus eins und plus eins, "
               "die angibt, wie stark zwei Grössen zusammenhängen. Ein Wert nahe null bedeutet keinen "
-              "Zusammenhang. Damit ein Wert als gesichert gilt, muss er ein Konfidenzband überschreiten, "
-              "das von der Anzahl der Beobachtungen abhängt; bei rund 1100 Beobachtungen liegt es bei etwa "
-              "plus minus 0.06. Abbildung 5 zeigt den Zusammenhang für jede Verschiebung.")
+              "Zusammenhang. Damit ein Wert als gesichert gilt (statistisch signifikant), muss er ein "
+              "Konfidenzband überschreiten, das von der Anzahl der Beobachtungen abhängt und sich als "
+              "rund 2 geteilt durch die Wurzel der Beobachtungszahl berechnet; bei rund 1100 "
+              "Beobachtungen liegt es bei etwa plus minus 0.06. Weil wir 21 Verschiebungen nebeneinander "
+              "prüfen, werten wir ein einzelnes, knappes Überschreiten des Bandes nicht als Beleg; "
+              "massgebend ist, ob sich ein klares Maximum bei einer bestimmten Verschiebung deutlich vom "
+              "Band abhebt. Abbildung 5 zeigt den Zusammenhang für jede Verschiebung.")
     para(doc, "So entsteht die Kurve in Abbildung 5: Für jede Verschiebung k bilden wir alle Paare aus "
               "dem Sentiment eines Tages und der Kursveränderung k Tage später und berechnen über alle "
               "rund 1100 Paare eine einzige Korrelation. Ein Punkt der Kurve ist also kein Mittelwert "
@@ -766,8 +792,8 @@ def build():
               "neutralen Wochen sind in den Abbildungen als graue Punkte auf der Nulllinie markiert. "
               "Tage ganz ohne Artikel gibt es nur auf Tagesebene (Kapitel 5.2); beim Zusammenfassen zu "
               "Wochen verschwinden diese Lücken.")
-    add_figure(doc, FIGDIR / "fig_weekly_EUR_USD.png", "Abbildung 6: EUR/USD, Kursniveau und wöchentliches Nachrichten-Sentiment. Oben der gesamte Zeitraum, unten die letzten zwölf Monate vergrössert. Punkte auf der Kurslinie sind Wochenschlusskurse, graue Punkte auf der Nulllinie sind neutrale Wochen (Median 0).", width=16.5)
-    add_figure(doc, FIGDIR / "fig_weekly_GBP_USD.png", "Abbildung 7: GBP/USD, Kursniveau und wöchentliches Nachrichten-Sentiment. Oben der gesamte Zeitraum, unten die letzten zwölf Monate vergrössert. Punkte auf der Kurslinie sind Wochenschlusskurse, graue Punkte auf der Nulllinie sind neutrale Wochen (Median 0).", width=16.5)
+    add_figure(doc, FIGDIR / "fig_weekly_EUR_USD.png", "Abbildung 6: EUR/USD, Kursniveau und wöchentliches Nachrichten-Sentiment. Oben der gesamte Zeitraum, unten die letzten zwölf Monate vergrössert. Punkte auf der Kurslinie sind Wochenschlusskurse, graue Punkte auf der Nulllinie sind neutrale Wochen (Median 0). Die Sentiment-Achse ist in beiden Teilbildern gleich skaliert.", width=16.5)
+    add_figure(doc, FIGDIR / "fig_weekly_GBP_USD.png", "Abbildung 7: GBP/USD, Kursniveau und wöchentliches Nachrichten-Sentiment. Oben der gesamte Zeitraum, unten die letzten zwölf Monate vergrössert. Punkte auf der Kurslinie sind Wochenschlusskurse, graue Punkte auf der Nulllinie sind neutrale Wochen (Median 0). Die Sentiment-Achse ist in beiden Teilbildern gleich skaliert.", width=16.5)
     para(doc, "In der vergrösserten Ansicht fallen durchaus einzelne Episoden auf, die nach einem "
               "Vorlauf aussehen. Im März 2026 etwa fällt der Kurs in zwei Wochen mit stark negativem "
               "Sentiment deutlich, und in positiven Wochen steigt er wieder. Solche Episoden sind echt, und sie passen zum Ergebnis des Granger-Tests in Kapitel 9.4, der dem "
@@ -781,13 +807,13 @@ def build():
               "Folgewochen deutlich von null verschieden sein.")
     add_table(
         doc, "Tabelle 7: Sentiment einer Woche und Kursbewegung in den Folgewochen",
-        ["Wechselkurs", "selbe Woche", "bis 1 Woche später", "bis 2 Wochen später", "bis 3 Wochen später"],
+        ["Wechselkurs", "selbe Woche", "bis 1 Woche später", "bis 2 Wochen später", "bis 3 Wochen später", "bis 4 Wochen später"],
         [
-            ["EUR/USD", "0.23", "0.07", "0.01", "minus 0.03"],
-            ["GBP/USD", "0.17", "0.07", "0.07", "0.01"],
+            ["EUR/USD", "0.22", "0.07", "0.01", "minus 0.03", "minus 0.01"],
+            ["GBP/USD", "0.17", "0.07", "0.07", "0.01", "minus 0.02"],
         ],
         row_colors=[COL_REAL, COL_REAL],
-        widths=[2.8, 3.0, 3.6, 3.6, 3.6],
+        widths=[2.6, 2.4, 2.8, 2.8, 2.8, 2.8],
     )
     add_figure(doc, FIGDIR / "fig_forward_weeks.png", "Abbildung 8: Sentiment einer Woche und kumulative Kursbewegung der Folgewochen. Der Zusammenhang besteht nur in derselben Woche und fällt danach gegen null.", width=15)
     para(doc, "Das Muster ist klar: Der Zusammenhang ist in derselben Woche am stärksten und fällt danach "
@@ -796,12 +822,14 @@ def build():
               "gemeinsam in derselben Periode.")
     para(doc, "Dieselbe Prüfung haben wir neben der Tages- und Wochenebene auch auf Monatsebene "
               "gemacht. Tabelle 8 stellt den Zusammenhang im selben Zeitraum für alle drei Zeithorizonte "
-              "nebeneinander.")
+              "nebeneinander. Dass die Wochen-Spalte 224 statt 225 Beobachtungen zählt, liegt an der "
+              "Veränderungsrechnung: Die erste der 225 Wochen hat keine Vorwoche, ihre Kursveränderung "
+              "lässt sich nicht bilden.")
     add_table(
         doc, "Tabelle 8: Zusammenhang im selben Zeitraum je Zeithorizont",
         ["Wechselkurs", "Tag", "Woche", "Monat", "Beobachtungen (Tag / Woche / Monat)"],
         [
-            ["EUR/USD", "0.18", "0.23", "0.09", "1108 / 224 / 51"],
+            ["EUR/USD", "0.18", "0.22", "0.09", "1108 / 224 / 51"],
             ["GBP/USD", "0.21", "0.17", "0.27", "1105 / 224 / 51"],
         ],
         row_colors=[COL_REAL, COL_REAL],
@@ -822,15 +850,22 @@ def build():
               "der Kursveränderung verbessert, über das hinaus, was die eigene Vergangenheit der "
               "Kursveränderung bereits leistet. Ein kleiner Wert (unter 0.05) in der folgenden Tabelle "
               "bedeutet, dass das Sentiment einen eigenen Vorhersagebeitrag liefert.")
+    para(doc, "Der Test setzt stationäre Reihen voraus, also Reihen ohne langfristigen Trend (Anhang B). "
+              "Ein Augmented-Dickey-Fuller-Test bestätigt das für die verwendeten Eingangsreihen: "
+              "Tagesveränderung und Tages-Sentiment sind bei beiden Wechselkursen klar stationär (p unter "
+              "0.001), während das Kursniveau erwartungsgemäss nicht stationär ist und deshalb nicht in "
+              "den Test eingeht. Geprüft werden Verzögerungen von einem bis fünf Tagen, also bis zu einer "
+              "Handelswoche; das deckt den Bereich ab, in dem die Korrelationskurve in Abbildung 5 "
+              "überhaupt noch von null verschieden ist.")
     add_table(
         doc, "Tabelle 9: Granger-Test, p-Werte für den Vorhersagebeitrag des Sentiments",
         ["Verzögerung", "EUR/USD: Sentiment sagt Kurs voraus", "GBP/USD: Sentiment sagt Kurs voraus"],
         [
-            ["1 Tag", "0.001", "0.000"],
-            ["2 Tage", "0.000", "0.000"],
-            ["3 Tage", "0.001", "0.000"],
-            ["4 Tage", "0.001", "0.000"],
-            ["5 Tage", "0.002", "0.000"],
+            ["1 Tag", "0.001", "kleiner 0.001"],
+            ["2 Tage", "kleiner 0.001", "kleiner 0.001"],
+            ["3 Tage", "0.001", "kleiner 0.001"],
+            ["4 Tage", "0.001", "kleiner 0.001"],
+            ["5 Tage", "0.002", "kleiner 0.001"],
         ],
         widths=[3.5, 5.5, 5.5],
     )
@@ -842,19 +877,29 @@ def build():
               "brauchbarer Frühindikator.")
     para(doc, "Aufschlussreich ist die Gegenrichtung. Bei GBP/USD verbessert die Vergangenheit des "
               "Kurses die Vorhersage des Sentiments nicht (alle Werte über 0.29); der Zusammenhang läuft "
-              "dort also einseitig vom Sentiment zum Kurs. Bei EUR/USD ist der Effekt in beide Richtungen "
-              "schwach signifikant. Da Sentiment und Kurs zudem stark gleichzeitig zusammenhängen, kann "
-              "ein Teil dieses Vorhersagebeitrags indirekt aus dem gleichzeitigen Zusammenhang stammen.")
-    para(doc, "Zwei Einschränkungen gehören zur ehrlichen Einordnung. Erstens zählen unsere "
+              "dort also einseitig vom Sentiment zum Kurs. Bei EUR/USD ist der Effekt in der "
+              "Gegenrichtung nur bei kurzen Verzögerungen schwach signifikant (0.004, 0.026 und 0.039 "
+              "bei einem bis drei Tagen, 0.052 und 0.097 bei vier und fünf Tagen). Das widerspricht der "
+              "Korrelation bei der Verschiebung von minus einem Tag aus Kapitel 9.2 nicht: Die "
+              "Korrelation misst den rohen Zusammenhang zwischen Kursbewegung und späterem Sentiment, "
+              "der Granger-Test dagegen nur den Beitrag, der über die eigene Vergangenheit des "
+              "Sentiments hinausgeht. Da Sentiment und Kurs zudem stark gleichzeitig zusammenhängen, "
+              "kann ein Teil dieses Vorhersagebeitrags indirekt aus dem gleichzeitigen Zusammenhang "
+              "stammen.")
+    para(doc, "Drei Einschränkungen gehören zur ehrlichen Einordnung. Erstens zählen unsere "
               "Verzögerungen Kalendertage. Wegen der Wochenenden steckt in der Verzögerung von einem Tag "
               "manchmal auch ein Abstand von drei Tagen, etwa von Freitag zu Montag. Zweitens nimmt der "
               "verwendete Test an, dass die Kurse über die ganze Zeit gleich stark schwanken. Tatsächlich "
               "wechseln Finanzmärkte zwischen ruhigen und unruhigen Phasen, wodurch die p-Werte etwas zu "
-              "klein ausfallen können. Beides ändert das Gesamtbild nicht, mahnt aber, die sehr kleinen "
-              "Werte nicht überzubewerten.")
-    para(doc, "Alle p-Werte beider Richtungen erzeugt das Skript regenerate_lead_lag_results.py "
-              "reproduzierbar und legt sie in der Datei granger_results.csv ab; die Tabelle oben zitiert "
-              "daraus die Richtung vom Sentiment zur Kursveränderung.")
+              "klein ausfallen können. Drittens ordnen wir jeden Artikel dem Kalendertag seiner "
+              "Veröffentlichung zu, ohne die Uhrzeit zu berücksichtigen: Auf einen Artikel vom späten "
+              "Abend kann der Kurs erst am Folgetag reagieren, sodass ein Teil des kleinen "
+              "Vorhersagebeitrags allein aus dieser Tageszuordnung stammen kann. Alles drei ändert das "
+              "Gesamtbild nicht, mahnt aber, die sehr kleinen Werte nicht überzubewerten.")
+    para(doc, "Alle p-Werte beider Richtungen sowie die Stationaritätstests erzeugt das Skript "
+              "regenerate_lead_lag_results.py reproduzierbar und legt sie in den Dateien "
+              "granger_results.csv und stationarity_results.csv ab; die Tabelle oben zitiert daraus die "
+              "Richtung vom Sentiment zur Kursveränderung.")
 
     h2(doc, "9.5 Warum eine reine Kursgrafik einen Vorlauf vermuten lässt")
     para(doc, "Wenn man Kursniveau und Sentiment beide als Verlauf über die Zeit zeichnet, kann der "
@@ -866,6 +911,10 @@ def build():
               "(Kapitel 9.3), die den scheinbaren Vorlauf nicht bestätigen.")
 
     h2(doc, "9.6 Ergebnis der eigenen Datenbeschaffung")
+    para(doc, "Anders als die EODHD-Nachrichten lassen sich die gescrapten Artikel keinem einzelnen "
+              "Währungspaar zuordnen, denn die Feeds und Foren berichten allgemein über den Devisenmarkt. "
+              "Wir bilden deshalb eine einzige Sentiment-Tagesreihe über alle gesammelten Artikel und "
+              "vergleichen diese eine Reihe mit jedem der drei Wechselkurse einzeln.")
     para(doc, "Auf den selbst über Webscraping gesammelten Nachrichten zeigt sich kein belastbarer "
               "Zusammenhang. Die stärksten Werte erreichen zwar 0.29 und liegen damit über dem bei nur "
               "85 gemeinsamen Tagen sehr breiten Konfidenzband von rund plus minus 0.21. Sie treten aber "
@@ -913,10 +962,15 @@ def build():
     para(doc, "Die Grenzen der Auswertung gehören zur Antwort. Für EUR/CHF reichten die Nachrichten von "
               "EODHD nicht aus. Die selbst gesammelten Nachrichten waren zu dünn für eine belastbare "
               "Aussage. TextBlob ist für Finanztexte nur eingeschränkt geeignet.")
-    para(doc, "Als nächste Schritte bieten sich an: ein spezialisiertes Verfahren zur Sentiment-Messung "
-              "für Finanztexte einzusetzen, um die vielen neutralen Werte zu verringern, sowie die eigene "
-              "Datenbeschaffung über einen längeren Zeitraum laufen zu lassen, damit auch der selbst "
-              "erstellte Nachrichtenstrom eine belastbare Auswertung erlaubt.")
+    para(doc, "Bei einem weiteren Versuch würden wir vier Dinge anpassen. Erstens ein auf Finanztexte "
+              "spezialisiertes Verfahren zur Sentiment-Messung einsetzen, etwa FinBERT oder VADER, um "
+              "die vielen neutralen Werte von TextBlob zu verringern. Zweitens die eigene "
+              "Datenbeschaffung über einen längeren Zeitraum laufen lassen, damit auch der selbst "
+              "erstellte Nachrichtenstrom eine belastbare Auswertung erlaubt. Drittens die in Kapitel "
+              "5.5 beschriebene Restdifferenz von rund 12 Pips zwischen Yahoo und EODHD bei EUR/USD "
+              "anhand von Intraday-Daten weiter eingrenzen, um die Tagesfenster der Anbieter exakt zu "
+              "verstehen. Viertens den manuellen MetaTrader-Export durch einen automatischen Abruf "
+              "ersetzen, damit die Pipeline durchgehend ohne Handarbeit läuft.")
 
     # =====================================================================
     h1(doc, "Anhang A: Glossar")
@@ -930,7 +984,7 @@ def build():
             ["Kursveränderung (Rendite)", "Veränderung des Kurses von einem Zeitpunkt zum nächsten."],
             ["Median", "Der mittlere Wert einer Reihe, unempfindlich gegenüber einzelnen Ausreissern."],
             ["Korrelation", "Mass für den Zusammenhang zweier Grössen, von minus eins bis plus eins."],
-            ["Konfidenzband", "Schwelle, ab der ein gemessener Zusammenhang als gesichert und nicht als Zufall gilt."],
+            ["Konfidenzband", "Schwelle, ab der ein gemessener Zusammenhang als statistisch gesichert und nicht als Zufall gilt; berechnet als rund 2 geteilt durch die Wurzel der Beobachtungszahl."],
             ["Interpolation", "Rechnerisches Auffüllen fehlender Werte aus den Nachbarwerten."],
             ["Pip", "Kleinste übliche Kursbewegung, die vierte Nachkommastelle eines Wechselkurses."],
             ["REST-Schnittstelle (API)", "Programmierschnittstelle, die Daten über Web-Adressen ausliefert."],
@@ -963,7 +1017,11 @@ def build():
               "Winsorisieren, Transformieren oder Markieren zur Wahl. Bei Zeitreihen gilt die besondere "
               "Regel, dass extreme Ereignisse oft die wichtigste Information tragen und deshalb gesondert "
               "behandelt statt entfernt werden sollten. Quelle: Vorlesungsunterlagen zur Datenbereinigung "
-              "(Woche 2).")
+              "(Woche 2). Die beiden in Kapitel 5.4 als Ursachen genannten Marktereignisse sind belegt "
+              "durch die geldpolitische Lagebeurteilung der Schweizerischen Nationalbank vom 16. Juni "
+              "2022 (Erhöhung des Leitzinses um 0.5 Prozentpunkte) und den von der britischen Regierung "
+              "am 23. September 2022 vorgestellten Growth Plan mit schuldenfinanzierten "
+              "Steuersenkungen.")
     h3(doc, "Median und robuste Masse")
     para(doc, "Robuste Masse wie Median und Interquartilsabstand werden gegenüber Durchschnitt und "
               "Standardabweichung bevorzugt, wenn Ausreisser vorliegen, weil sie von einzelnen Extremwerten "
@@ -993,7 +1051,12 @@ def build():
               "null, damit Längenverhältnisse nicht verzerrt werden. Liniendiagramme von Kursverläufen "
               "nutzen dagegen einen an die Daten angepassten Achsenausschnitt, weil sonst die "
               "Bewegungen, um die es gerade geht, nicht mehr erkennbar wären; die Achsen sind dafür "
-              "stets beschriftet. Alle Abbildungen verwenden die farbenblind-sichere Okabe-Ito-Palette "
+              "stets beschriftet. Wo zwei Grössen mit unterschiedlichen Einheiten im selben Bild stehen "
+              "(Kursniveau und Sentiment in den Abbildungen 6 und 7), verwenden wir eine zweite "
+              "Wertachse. Damit das nicht in die Irre führt, trennen wir die beiden Grössen durch die "
+              "Darstellungsform (Linie gegen Balken), beschriften beide Achsen und halten die "
+              "Sentiment-Achse in beiden Teilbildern identisch skaliert. Alle Abbildungen verwenden die "
+              "farbenblind-sichere Okabe-Ito-Palette "
               "(Blau, Orange, Vermillion) und verzichten bewusst auf die Unterscheidung Rot gegen Grün, "
               "die für rund acht Prozent der Männer schwer lesbar ist. Quelle: Vorlesungsunterlagen zur "
               "Datenvisualisierung (Woche 8).")

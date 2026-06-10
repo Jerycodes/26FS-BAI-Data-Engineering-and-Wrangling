@@ -140,3 +140,28 @@ gout = DATA / "processed/news/granger_results.csv"
 granger.to_csv(gout, index=False)
 print("\nGeschrieben:", gout)
 print(granger.to_string(index=False))
+
+# --- Stationaritaet (ADF-Test, Voraussetzung des Granger-Tests) --------------
+# Der Granger-Test setzt stationaere Eingangsreihen voraus. Der Augmented-
+# Dickey-Fuller-Test belegt das fuer Tagesrendite und Tages-Sentiment; das
+# Kursniveau ist erwartungsgemaess nicht stationaer und wird nicht verwendet
+# (Bericht Kapitel 9.4 zitiert diese Werte).
+from statsmodels.tsa.stattools import adfuller
+
+adf_rows = []
+for pair in ["EUR_USD", "GBP_USD"]:
+    series = {
+        "kursniveau": forex_close[pair].dropna(),
+        "tagesrendite": returns[pair].dropna(),
+        "tages_sentiment": sentiment_eodhd[pair].dropna(),
+    }
+    for name, s in series.items():
+        stat, p = adfuller(s, autolag="AIC")[:2]
+        adf_rows.append({"pair": pair, "series": name, "adf_stat": round(float(stat), 2),
+                         "p_value": round(float(p), 4), "n": len(s)})
+
+adf = pd.DataFrame(adf_rows)
+aout = DATA / "processed/news/stationarity_results.csv"
+adf.to_csv(aout, index=False)
+print("\nGeschrieben:", aout)
+print(adf.to_string(index=False))

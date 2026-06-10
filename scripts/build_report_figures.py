@@ -116,6 +116,7 @@ for pair, color in [("EUR_USD", "#0072B2"), ("GBP_USD", "#E69F00")]:
     ax.fill_between(band.index, -band.values, band.values, color=color, alpha=0.08)
 ax.axhline(0, color="black", lw=0.8)
 ax.axvline(0, color="grey", ls=":", lw=0.8)
+ax.set_xticks(range(-10, 11, 2))  # nur ganzzahlige Verschiebungen, keine Dezimal-Ticks
 ax.set_xlabel("Verschiebung in Tagen  (positiv = Sentiment läuft dem Kurs voraus)")
 ax.set_ylabel("Korrelation")
 ax.set_title("Zusammenhang Sentiment und Kursveränderung je Verschiebung")
@@ -129,7 +130,7 @@ print("gespeichert: fig_leadlag.png")
 # Abbildung: Wochen-Überlagerung Kursniveau und Sentiment, oben gesamter
 # Zeitraum, unten Zoom auf die letzten 12 Monate (dichteste News-Abdeckung)
 # ===========================================================================
-def plot_price_sentiment(ax1, pw, sw, bar_width, zoom=False):
+def plot_price_sentiment(ax1, pw, sw, bar_width, zoom=False, sent_ylim=None):
     # Kurslinie: Marker zeigen die einzelnen Wochenschluss-Punkte; im Zoom
     # gestrichelt verbunden, damit die Wochen-Aggregation erkennbar ist.
     ax1.plot(pw.index, pw.values, color="#333333", lw=1.1,
@@ -148,6 +149,8 @@ def plot_price_sentiment(ax1, pw, sw, bar_width, zoom=False):
              ms=3.5 if zoom else 2.5, color="#777777",
              label="neutrale Woche (Median 0)")
     ax2.set_ylabel("Wochen-Sentiment", color="#555555")
+    if sent_ylim is not None:
+        ax2.set_ylim(*sent_ylim)  # gleiche Skala in beiden Panels, sonst wirken identische Werte unterschiedlich gross
     ax2.grid(False)
     return ax2
 
@@ -170,13 +173,15 @@ for pair in ["EUR_USD", "GBP_USD"]:
     print(f"  {pair}: {int(sw.notna().sum())} Wochen mit Artikeln, davon exakt neutral (Median 0): "
           f"{n_neutral}, ohne Artikel: {int(sw.isna().sum())}")
     zoom_start = pw.index.max() - pd.DateOffset(months=12)
+    pad = 0.05 * (sw.max() - sw.min())
+    sent_ylim = (sw.min() - pad, sw.max() + pad)
     fig, (ax_full, ax_zoom) = plt.subplots(2, 1, figsize=(11, 7.5))
-    plot_price_sentiment(ax_full, pw, sw, bar_width=5)
+    plot_price_sentiment(ax_full, pw, sw, bar_width=5, sent_ylim=sent_ylim)
     ax_full.axvspan(zoom_start, pw.index.max(), color="#999999", alpha=0.12)
     ax_full.set_title(f"{PAIR_LABEL[pair]}: Kursniveau und Nachrichten-Sentiment je Woche, gesamter Zeitraum")
     ax_full.legend(handles=WEEKLY_LEGEND, loc="upper left", fontsize=8)
     pz, sz = pw[pw.index >= zoom_start], sw[sw.index >= zoom_start]
-    plot_price_sentiment(ax_zoom, pz, sz, bar_width=4, zoom=True)
+    plot_price_sentiment(ax_zoom, pz, sz, bar_width=4, zoom=True, sent_ylim=sent_ylim)
     ax_zoom.set_title("Vergrösserung: die letzten zwölf Monate (grau markierter Bereich oben)")
     fig.tight_layout()
     fig.savefig(FIG / f"fig_weekly_{pair}.png")
@@ -277,7 +282,7 @@ ax.bar_label(b1, labels=[f"{round(v, 2) + 0.0:.2f}" for v in before], fontsize=9
 ax.bar_label(b2, labels=[f"{round(v, 2) + 0.0:.2f}" for v in after], fontsize=9)
 ax.set_xticks(x)
 ax.set_xticklabels([PAIR_LABEL[p] for p in pairs])
-ax.set_ylabel("Übereinstimmung Yahoo und EODHD (Tagesveränderung)")
+ax.set_ylabel("Korrelation der Tagesveränderungen\n(Yahoo vs. EODHD)")
 ax.set_title("Quellenvergleich vor und nach der Datums-Ausrichtung")
 ax.axhline(0, color="black", lw=0.8)
 ax.legend()

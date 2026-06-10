@@ -1,0 +1,7 @@
+pair,series,adf_stat,p_value,n
+EUR_USD,kursniveau,-1.39,0.5886,1117
+EUR_USD,tagesrendite,-23.7,0.0,1116
+EUR_USD,tages_sentiment,-10.8,0.0,1440
+GBP_USD,kursniveau,-1.96,0.3052,1117
+GBP_USD,tagesrendite,-33.28,0.0,1116
+GBP_USD,tages_sentiment,-7.66,0.0,1409
